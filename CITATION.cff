@@ -6,6 +6,11 @@ authors:
   - given-names: Adrian
     family-names: Regez
     email: kontakt@liloport.ch
+doi: 10.5281/zenodo.23725695
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23725695
+    description: "Concept DOI: alle Versionen, führt immer zur neuesten"
 repository-code: "https://github.com/AdiRegez/liloport"
 url: "https://liloport.ch"
 license: MIT

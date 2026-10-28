@@ -1,7 +1,9 @@
 # Liloport
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23725695.svg)](https://doi.org/10.5281/zenodo.23725695)
+
 Liloport («Lilo» für Lifelong Learning, «Port» für Portfolio) ist ein lokales Portfolio-Wiki für
-Studierende und "Lieflong Learners": Seiten und Verzeichnisse liegen als normale HTML-Dateien und Ordner auf dem eigenen
+Studierende: Seiten und Verzeichnisse liegen als normale HTML-Dateien und Ordner auf dem eigenen
 Rechner, lassen sich per Doppelklick lesen und mit einem kleinen Python-Server bearbeiten.
 
 > **Beta (Version 0.9).** Liloport ist vollständig nutzbar, aber noch jung: Es können Fehler vorkommen.
@@ -20,6 +22,9 @@ Funktionen: Dashboard, Verzeichnisse, Seiten mit Text, Bild, Video, PDF, ZIP-Dat
 und Seiten-CSS; Amateur/Profi; Anhänge mit Löschlogik; Weiterleitungen; Export mit Passwortschutz und
 Kommentaren; Abgabe mit Prüfsumme; Kompetenzrahmen und -abbildung; Profil; Volltextsuche inkl.
 PDF-Inhalten; automatisches Speichern, Undo/Redo, Verlauf, Papierkorb, Backups.
+
+**Zitieren:** Regez, A. Liloport – Lifelong-Learning-Portfolio [Software]. Zenodo. https://doi.org/10.5281/zenodo.23725695
+(der DOI führt immer zur neuesten Version; «Cite this repository» rechts auf GitHub liefert weitere Formate).
 
 ## Zwei Designebenen
 
