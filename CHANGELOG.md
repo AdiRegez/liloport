@@ -4,6 +4,10 @@ Alle wesentlichen Änderungen an Liloport. Versionen vor 1.0 sind Beta: Liloport
 noch Fehler vorkommen. Rückmeldungen bitte über [GitHub-Issues](https://github.com/AdiRegez/liloport/issues)
 oder an kontakt@liloport.ch.
 
+## 0.9.1 Beta
+
+- DOI (Zenodo) in der Fusszeile jeder Liloport-Seite und in der Zitierangabe (CITATION.cff)
+
 ## 0.9.0 Beta – erste öffentliche Version
 
 **Portfolio und Seiten**
