@@ -1,0 +1,16 @@
+{
+  "name": "Liloport",
+  "untertitel": "Lifelong-Learning-Portfolio",
+  "version": "0.9.0",
+  "github": "https://github.com/AdiRegez/liloport",
+  "doi": "",
+  "lizenz": "MIT",
+  "lizenzUrl": "https://opensource.org/licenses/MIT",
+  "impressum": {
+    "verantwortlich": "Adrian Regez",
+    "adresse": "Postfach, 3604 Thun, Schweiz",
+    "kontakt": "kontakt@liloport.ch",
+    "institution": ""
+  },
+  "sponsoren": "https://github.com/sponsors/AdiRegez"
+}

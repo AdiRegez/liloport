@@ -1,0 +1,25 @@
+Liloport für macOS
+==================
+
+INSTALLIEREN
+  1. «Liloport» auf den Ordner «Programme» (Applications) ziehen.
+  2. Im Ordner «Programme» Liloport öffnen.
+
+  Erster Start: macOS meldet, dass Liloport nicht von Apple geprüft wurde.
+  - «Fertig» bzw. «OK» klicken.
+  - Systemeinstellungen → Datenschutz & Sicherheit → ganz unten bei «Liloport» auf «Dennoch öffnen»
+    klicken und bestätigen (ältere macOS-Versionen: im Finder Rechtsklick auf Liloport → «Öffnen»).
+  Das ist nur beim ersten Start nötig.
+
+  Für ein Symbol im Dock: Liloport starten, dann Rechtsklick auf das Symbol im Dock →
+  Optionen → «Im Dock behalten».
+
+BEIM START
+  Ein kleines Fenster «Liloport» zeigt, dass Liloport läuft; das Dashboard öffnet sich im Browser.
+  Das Fenster offen lassen, solange du arbeitest. Beenden mit dem Knopf «Beenden» oder Cmd+Q.
+
+DEINE INHALTE
+  liegen im Ordner «Liloport» in deinem Benutzerordner. Wer Liloport aus «Programme» löscht,
+  behält die Inhalte.
+
+Hilfe und Quellcode: https://liloport.ch · https://github.com/AdiRegez/liloport

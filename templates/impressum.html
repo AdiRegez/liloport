@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impressum – {{NAME}}</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="dashboard rechtstext" data-rel="../">
+<header class="kopf" id="kopf">
+  <a class="logo" href="../index.html" title="Zum Dashboard"><img src="logo.svg" alt=""><span>{{NAME}}</span></a>
+  <a class="dashboard-link" href="../index.html" title="Zurück zum Dashboard"><span>Dashboard</span></a>
+  <span class="kopf-rechts" id="kopf-rechts"></span>
+  <button class="kopf-zu" id="kopf-zu" type="button" title="Liloport-Leiste einklappen" aria-label="Liloport-Leiste einklappen">▲</button>
+</header>
+<button class="kopf-griff" id="kopf-griff" type="button" title="Liloport-Leiste einblenden" hidden><img src="logo.svg" alt="">▼</button>
+<div class="modus-band" id="modus-band" hidden></div>
+<div class="rumpf">
+<main class="inhalt dashboard-inhalt">
+<h1>Impressum</h1>
+<p class="hinweis">Dieses Impressum betrifft die Software {{NAME}} (Version {{VERSION}}), nicht die mit ihr erstellten Inhalte. Für Inhalte, die mit {{NAME}} erstellt und veröffentlicht werden, ist die jeweilige Autorin oder der jeweilige Autor verantwortlich.</p>
+
+<h2>Verantwortlich für die Software</h2>
+<p>{{VERANTWORTLICH}}<br>{{INSTITUTION}}{{ADRESSE}}<br>Kontakt: {{KONTAKT}}</p>
+
+<h2>Projekt</h2>
+<p>{{NAME}} – {{UNTERTITEL}}, Version {{VERSION}}.<br>
+{{GITHUB_ZEILE}}{{DOI_ZEILE}}</p>
+
+<h2>Lizenz</h2>
+<p>{{NAME}} ist freie Software unter der <a href="{{LIZENZ_URL}}" rel="license noopener">{{LIZENZ}}-Lizenz</a>. Die Software darf kostenlos verwendet, kopiert, verändert und weitergegeben werden; der Lizenztext liegt der Software bei (Datei <code>LICENSE</code>).</p>
+
+<h2>Haftung</h2>
+<p>{{NAME}} wird ohne Gewähr bereitgestellt («as is»). Die Software läuft vollständig auf dem Rechner der Nutzenden; die Verantwortung für die damit erstellten Inhalte, für deren Veröffentlichung auf einem Webserver und für regelmässige Sicherungen liegt bei den Nutzenden. Es besteht keine Haftung für Datenverlust oder für Inhalte, die mit {{NAME}} veröffentlicht werden.</p>
+
+<h2>Verwendete Komponenten</h2>
+<p>{{NAME}} verwendet ausschliesslich die Python-Standardbibliothek und eigenen JavaScript-Code; es werden keine Bibliotheken von Drittanbietern geladen, weder lokal noch auf exportierten Seiten.</p>
+</main>
+</div>
+{{PRODUKTFUSS}}
+<script src="menu.js"></script>
+<script src="reader.js"></script>
+</body>
+</html>

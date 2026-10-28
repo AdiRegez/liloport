@@ -1,0 +1,23 @@
+Liloport für Linux
+==================
+
+Läuft auf aktuellen Systemen (glibc 2.39+, z. B. Ubuntu 24.04+, Debian 13+, Fedora 40+).
+Ältere Systeme: Liloport mit Python starten (siehe https://liloport.ch/installation.html).
+
+INSTALLIEREN (ohne Administratorrechte)
+  1. Diesen Ordner an einen beliebigen Ort entpacken.
+  2. Im Terminal in diesen Ordner wechseln und ausführen:   ./installieren.sh
+  3. Liloport erscheint im Programm-Menü und als Symbol auf dem Schreibtisch.
+     Unter GNOME beim ersten Doppelklick auf das Desktop-Symbol «Start erlauben» wählen.
+
+Ohne Installation: ./app/liloport starten.
+
+BEIM START
+  Ein kleines Fenster «Liloport» zeigt, dass Liloport läuft; das Dashboard öffnet sich im Browser.
+  Das Fenster offen lassen, solange du arbeitest. «Beenden» oder Schliessen beendet Liloport.
+
+DEINE INHALTE
+  liegen im Ordner ~/Liloport (änderbar im Dashboard). Deinstallieren lässt sie unberührt:
+  ~/.local/share/liloport-programm/deinstallieren.sh
+
+Hilfe und Quellcode: https://liloport.ch · https://github.com/AdiRegez/liloport

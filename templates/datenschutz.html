@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Datenschutz – {{NAME}}</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="dashboard rechtstext" data-rel="../">
+<header class="kopf" id="kopf">
+  <a class="logo" href="../index.html" title="Zum Dashboard"><img src="logo.svg" alt=""><span>{{NAME}}</span></a>
+  <a class="dashboard-link" href="../index.html" title="Zurück zum Dashboard"><span>Dashboard</span></a>
+  <span class="kopf-rechts" id="kopf-rechts"></span>
+  <button class="kopf-zu" id="kopf-zu" type="button" title="Liloport-Leiste einklappen" aria-label="Liloport-Leiste einklappen">▲</button>
+</header>
+<button class="kopf-griff" id="kopf-griff" type="button" title="Liloport-Leiste einblenden" hidden><img src="logo.svg" alt="">▼</button>
+<div class="modus-band" id="modus-band" hidden></div>
+<div class="rumpf">
+<main class="inhalt dashboard-inhalt">
+<h1>Datenschutz</h1>
+<p class="hinweis">Diese Erklärung beschreibt, welche Daten {{NAME}} (Version {{VERSION}}) verarbeitet. Sie betrifft die Software, nicht die Inhalte, die Nutzende damit erstellen.</p>
+
+<h2>Grundsatz: alles bleibt auf dem eigenen Rechner</h2>
+<p>{{NAME}} läuft vollständig lokal. Alle Verzeichnisse, Seiten, Anhänge, Versionen und Backups liegen im Inhalte-Ordner auf dem Rechner der Nutzenden. Die Software baut keine Verbindung zu Servern des Projekts oder zu Dritten auf, sendet keine Nutzungsdaten, enthält keine Analyse- oder Werbedienste und lädt keine externen Schriften, Skripte oder Bilder.</p>
+
+<h2>Lokaler Server</h2>
+<p>Zum Bearbeiten startet {{NAME}} einen kleinen Webserver, der ausschliesslich an die Adresse 127.0.0.1 (localhost) gebunden ist und damit nur vom eigenen Rechner aus erreichbar ist. Er führt kein Protokoll über Zugriffe, das über die Laufzeit des Programms hinaus gespeichert wird.</p>
+
+<h2>Browser-Speicher</h2>
+<p>Im Browser werden mit <code>localStorage</code> nur Bedienzustände gemerkt (etwa, ob die Leiste oder das Seitenmenü eingeklappt ist). Es werden keine Cookies gesetzt. Auf exportierten Seiten ohne Server-Speicherung werden Kommentare der kommentierenden Person in deren eigenem Browser-Speicher abgelegt; sie verlassen den Browser nur, wenn die Person die Seite selbst herunterlädt und weitergibt.</p>
+
+<h2>Exportierte Seiten und Kommentare</h2>
+<p>Wer eine Seite mit {{NAME}} exportiert und auf einen Webserver lädt, ist für diese Veröffentlichung selbst verantwortlich. Der Export entfernt Autor, Zeitstempel und Bild-Metadaten (EXIF), sofern sie nicht ausdrücklich eingeschaltet werden, und weist Suchmaschinen an, die Seite nicht zu indexieren.</p>
+<p>Ist die Kommentarfunktion eingeschaltet, speichert der Webserver je Kommentar nur den freiwillig angegebenen Namen, den Text und den Zeitpunkt in einer Datei im Seitenordner (<code>comments.json</code>). IP-Adressen werden nicht gespeichert; zur Begrenzung der Kommentarhäufigkeit wird für höchstens eine Stunde ein nicht umkehrbarer Tages-Hashwert der Herkunft in einer Sperrdatei gehalten. Welche Zugriffsprotokolle der Webserver selbst führt, bestimmt der jeweilige Hosting-Anbieter; darauf hat {{NAME}} keinen Einfluss.</p>
+
+<h2>Rechte der Betroffenen</h2>
+<p>Da das Projekt keine personenbezogenen Daten erhebt, gibt es beim Projekt nichts einzusehen, zu berichtigen oder zu löschen. Für Kommentare auf veröffentlichten Seiten wenden sich Betroffene an die Autorin oder den Autor der jeweiligen Seite; diese können Kommentare in der Datei <code>comments.json</code> auf ihrem Webserver jederzeit entfernen.</p>
+
+<h2>Kontakt</h2>
+<p>Fragen zum Datenschutz der Software: {{KONTAKT}}<br>Verantwortlich: {{VERANTWORTLICH}}</p>
+</main>
+</div>
+{{PRODUKTFUSS}}
+<script src="menu.js"></script>
+<script src="reader.js"></script>
+</body>
+</html>

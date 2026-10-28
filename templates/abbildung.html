@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITEL}} – Kompetenzabbildung – Liloport</title>
+<link rel="stylesheet" href="../_wiki/style.css">
+</head>
+<body class="seite kompetenzseite{{EXPORT}}" data-rel="../" data-krid="{{KRID}}">
+<header class="kopf" id="kopf">
+  <a class="logo" href="../index.html" title="Zum Dashboard"><img src="../_wiki/logo.svg" alt=""><span>Liloport</span></a>
+  <a class="dashboard-link" href="../index.html" title="Zurück zum Dashboard"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 10.5V20h13v-9.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20v-5.5h4V20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>Dashboard</span></a>
+  <span class="kopf-rechts" id="kopf-rechts"></span>
+  <button class="kopf-zu" id="kopf-zu" type="button" title="Liloport-Leiste einklappen" aria-label="Liloport-Leiste einklappen">▲</button>
+</header>
+<button class="kopf-griff" id="kopf-griff" type="button" title="Liloport-Leiste einblenden" hidden><img src="../_wiki/logo.svg" alt="">▼</button>
+<div class="modus-band" id="modus-band" hidden></div>
+<div class="rumpf">
+<main class="inhalt ka-seite" id="inhalt">
+  <nav class="kr-nav"><a href="{{KRID}}.html">← Kompetenzrahmen ansehen oder bearbeiten</a></nav>
+  <h1 class="seitentitel">{{TITEL}}</h1>
+  <p class="seiten-meta">{{META}}</p>
+  {{GESAMT}}
+  <div class="ka-legende" aria-hidden="true"><span><span class="ka-punkt st-gruen"></span>erarbeitet</span><span><span class="ka-punkt st-orange"></span>in Bearbeitung</span><span><span class="ka-punkt st-weiss"></span>noch nicht bearbeitet</span><span><span class="ka-punkt st-offen"></span>offen</span><span class="ka-legende-hinweis">«Noch nicht bearbeitet»: Eine Seite ist zugeordnet, die Arbeit hat noch nicht begonnen. «Offen»: noch keiner Seite zugeordnet. Eine Stufe wird grün, sobald alle ihre Punkte grün sind; ein oranger Punkt färbt alles darüber orange. Die Zahl zeigt, wie viele Seiten daran arbeiten.</span></div>
+  {{INHALT}}
+  <details class="ka-zusammenfassung"><summary>Zahlen pro Ebene</summary>{{TABELLE}}</details>
+</main>
+</div>
+{{PRODUKTFUSS}}
+<script src="{{REL}}_wiki/menu.js"></script>
+<script src="{{REL}}_wiki/reader.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "Wenn du Liloport in einer Arbeit verwendest, zitiere es bitte so."
+title: "Liloport – Lifelong-Learning-Portfolio"
+type: software
+authors:
+  - given-names: Adrian
+    family-names: Regez
+    email: kontakt@liloport.ch
+repository-code: "https://github.com/AdiRegez/liloport"
+url: "https://liloport.ch"
+license: MIT
+keywords: [portfolio, e-portfolio, lifelong learning, wiki, kompetenzen]

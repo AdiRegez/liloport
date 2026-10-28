@@ -1,0 +1,2 @@
+# Nur zum Bauen der Installer (packaging/bauen.py); Liloport selbst braucht keine Pakete.
+pyinstaller==6.22.3

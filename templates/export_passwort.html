@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Geschützte Seite</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="seite export geschuetzt">
+<div class="ohne-gestaltung" style="max-width:40em;margin:1em auto;padding:1em 1.2em;border:2px solid #b45309;background:#fff7ed;color:#1f2937;font:16px/1.5 system-ui,sans-serif"><strong>Diese Seite wird unvollständig angezeigt.</strong> Wahrscheinlich wurde sie direkt in der ZIP-Datei geöffnet. Bitte die ZIP-Datei zuerst entpacken – unter Windows: Rechtsklick auf die ZIP-Datei › «Alle extrahieren…», auf dem Mac: Doppelklick – und dann im entpackten Ordner «Seite öffnen» doppelklicken.</div>
+<div class="rumpf">
+<main class="inhalt" id="inhalt">
+<form class="passwort-form" id="passwort-form">
+  <h1>Diese Seite ist geschützt</h1>
+  <p>Bitte das Passwort eingeben, um den Inhalt zu sehen.</p>
+  <div class="feld-zeile">
+    <input type="password" id="passwort" autocomplete="current-password" autofocus>
+    <button type="submit" class="knopf primaer">Öffnen</button>
+  </div>
+  <p class="fehlermeldung" id="passwort-fehler"></p>
+</form>
+</main>
+</div>
+<script id="liloport-entschluesseln">
+(function () {
+  var geheim = {{GEHEIM}};
+  var form = document.getElementById('passwort-form');
+  var fehler = document.getElementById('passwort-fehler');
+  function b64(s) { var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    fehler.textContent = '';
+    if (!window.crypto || !crypto.subtle) { fehler.textContent = 'Dieser Browser kann die Seite nicht entschlüsseln (Web Crypto fehlt; https:// nötig).'; return; }
+    var klartext = document.getElementById('passwort').value;
+    var pw = new TextEncoder().encode(klartext);
+    crypto.subtle.importKey('raw', pw, 'PBKDF2', false, ['deriveKey']).then(function (basis) {
+      return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(geheim.salt), iterations: geheim.iterationen, hash: 'SHA-256' },
+        basis, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    }).then(function (key) {
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(geheim.iv) }, key, b64(geheim.daten));
+    }).then(function (klar) {
+      var html = new TextDecoder().decode(klar);
+      // Für die anderen Seiten desselben Exports (Portfolio) bis zum Schliessen des Tabs merken
+      try { sessionStorage.setItem(merkSchluessel, klartext); } catch (e) { /* egal */ }
+      // export.js braucht das Passwort, um beim «Herunterladen» die Kopie wieder zu verschlüsseln
+      window.LiloportGeschuetzt = { passwort: klartext, iterationen: geheim.iterationen };
+      document.getElementById('inhalt').innerHTML = html;
+      document.title = geheim.titel;
+      document.body.className = 'seite export seite-' + geheim.slug;
+      if (window.LiloportExport) window.LiloportExport.init();
+    }).catch(function () {
+      fehler.textContent = 'Falsches Passwort.';
+      try { sessionStorage.removeItem(merkSchluessel); } catch (e) { /* egal */ }
+    });
+  });
+  var merkSchluessel = 'liloport-passwort-' + location.pathname.replace(/[^/]*$/, '');
+  try {
+    var gemerkt = sessionStorage.getItem(merkSchluessel);
+    if (gemerkt) { document.getElementById('passwort').value = gemerkt; form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit')); }
+  } catch (e) { /* egal */ }
+})();
+</script>
+<script type="application/json" id="liloport-meta">{{META}}</script>
+{{SKRIPTE}}
+</body>
+</html>
