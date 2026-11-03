@@ -16,6 +16,39 @@ TEMPLATES = PROGRAMM / "templates"
 STATIC = PROGRAMM / "static"
 BREITEN = ("voll", "halb", "klein")
 AUSRICHTUNGEN = ("links", "mitte", "rechts")
+TRENNER_ARTEN = {"gestrichelt": "dashed", "gepunktet": "dotted", "doppelt": "double"}
+_FARBE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _ganzzahl(wert, kleinste, groesste):
+    """Ganzzahl im Bereich oder None (defensiv: auch importierte Blöcke rendern sicher)."""
+    try:
+        zahl = int(wert)
+    except (TypeError, ValueError):
+        return None
+    return zahl if kleinste <= zahl <= groesste else None
+
+
+def trenner_stil(b: dict) -> str:
+    """Inline-Stil eines Trenners (Farbe, Dicke, Linienart, Abstand oben/unten); leer bei Standardwerten."""
+    teile = []
+    farbe = str(b.get("farbe") or "")
+    if not _FARBE.match(farbe):
+        farbe = ""
+    art = TRENNER_ARTEN.get(b.get("stil"))
+    dicke = _ganzzahl(b.get("dicke"), 1, 20)
+    if farbe or art or dicke:
+        breite = dicke or 1
+        if art == "double":
+            breite = max(breite, 3)   # eine Doppellinie braucht mindestens 3 Pixel
+        teile.append(f"border-top:{breite}px {art or 'solid'} {farbe or 'var(--pg-rand)'}")
+    oben = _ganzzahl(b.get("abstandOben"), 0, 200)
+    if oben is not None:
+        teile.append(f"margin-top:{oben}px")
+    unten = _ganzzahl(b.get("abstandUnten"), 0, 200)
+    if unten is not None:
+        teile.append(f"margin-bottom:{unten}px")
+    return f' style="{";".join(teile)}"' if teile else ""
 
 
 def _vorlage(name: str) -> str:
@@ -99,7 +132,22 @@ class BlockRenderer:
             inhalt = links.aufloesen(sanitize.filtern(b.get("html", ""), "profi"), self.ziel_fuer)
             return f'<section class="block block-text" data-id="{bid}" data-typ="text">{inhalt}</section>'
         if typ == "trenner":
-            return f'<hr class="block block-trenner" data-id="{bid}" data-typ="trenner">'
+            return f'<hr class="block block-trenner" data-id="{bid}" data-typ="trenner"{trenner_stil(b)}>'
+        if typ == "galerie":
+            bilder = [x for x in (b.get("bilder") or []) if isinstance(x, dict)]
+            n = _ganzzahl(b.get("spalten"), 2, 4) or 3
+            teile = []
+            for x in bilder:
+                e = self.registry.get(str(x.get("asset") or ""))
+                if not e:
+                    continue
+                text = html.escape(x.get("bildtext", "") or "")
+                cap = f"<figcaption>{text}</figcaption>" if text else ""
+                teile.append(f'<figure class="galerie-bild"><img src="{self.rel}{html.escape(e["datei"], quote=True)}" '
+                             f'alt="{text}" loading="lazy">{cap}</figure>')
+            if not teile:
+                return self._fehlt(bid, "galerie", "Noch keine Bilder in der Galerie gewählt.")
+            return f'<div class="block block-galerie galerie-{n}" data-id="{bid}" data-typ="galerie">{"".join(teile)}</div>'
         if typ == "bild":
             e = self._asset(b)
             if not e:
@@ -118,6 +166,13 @@ class BlockRenderer:
                 return self._fehlt(bid, "video", "Video noch nicht gewählt.")
             return (f'<figure class="block block-video" data-id="{bid}" data-typ="video">'
                     f'<video controls preload="metadata" src="{self.rel}{html.escape(e["datei"], quote=True)}"></video></figure>')
+        if typ == "audio":
+            e = self._asset(b)
+            if not e:
+                return self._fehlt(bid, "audio", "Audio-Datei noch nicht gewählt.")
+            return (f'<figure class="block block-audio" data-id="{bid}" data-typ="audio">'
+                    f'<audio controls preload="metadata" src="{self.rel}{html.escape(e["datei"], quote=True)}"></audio>'
+                    f'<figcaption>{html.escape(e["name"])}</figcaption></figure>')
         if typ == "pdf":
             e = self._asset(b)
             if not e:
@@ -186,7 +241,8 @@ def _klapp_titel(b: dict) -> str:
         return b.get("bildtext") or "Bild"
     if b.get("typ") == "button":
         return b.get("text") or "Button"
-    return {"video": "Video", "pdf": "PDF", "datei": "Datei", "spalten": "Spalten", "trenner": "Abschnitt"}.get(b.get("typ"), "Abschnitt")
+    return {"video": "Video", "audio": "Audio", "pdf": "PDF", "datei": "Datei", "spalten": "Spalten",
+            "galerie": "Galerie", "trenner": "Abschnitt"}.get(b.get("typ"), "Abschnitt")
 
 
 def produkt_laden() -> dict:
@@ -214,20 +270,21 @@ def produktfuss_html(rel: str, export: bool = False) -> str:
              + (f' <span class="pf-version">v{html.escape(version_anzeige(pr["version"]))}</span>' if pr.get("version") else "") + "</span>"]
     if export:
         teile[0] = f'<span class="pf-name">Erstellt mit {html.escape(pr["name"])}' + (f' v{html.escape(version_anzeige(pr["version"]))}' if pr.get("version") else "") + "</span>"
+    # Alle Links der Fusszeile öffnen in einem neuen Tab, damit die aktuelle Seite (z. B. im Editor) offen bleibt
     if pr.get("github"):
         url = pr["github"] if pr["github"].startswith("http") else "https://github.com/" + pr["github"]
-        teile.append(f'<a href="{html.escape(url, quote=True)}" rel="noopener">GitHub</a>')
+        teile.append(f'<a href="{html.escape(url, quote=True)}" target="_blank" rel="noopener">GitHub</a>')
     else:
         teile.append('<span class="pf-platzhalter" title="GitHub-Projekt folgt">GitHub</span>')
     if pr.get("doi"):
         url = pr["doi"] if pr["doi"].startswith("http") else "https://doi.org/" + pr["doi"]
-        teile.append(f'<a href="{html.escape(url, quote=True)}" rel="noopener">DOI</a>')
+        teile.append(f'<a href="{html.escape(url, quote=True)}" target="_blank" rel="noopener">DOI</a>')
     else:
         teile.append('<span class="pf-platzhalter" title="DOI folgt">DOI</span>')
-    teile.append(f'<a href="{html.escape(pr.get("lizenzUrl") or "#", quote=True)}" rel="license noopener">{html.escape(pr.get("lizenz") or "Lizenz")}</a>')
+    teile.append(f'<a href="{html.escape(pr.get("lizenzUrl") or "#", quote=True)}" target="_blank" rel="license noopener">{html.escape(pr.get("lizenz") or "Lizenz")}</a>')
     if not export:
-        teile.append(f'<a href="{rel}_wiki/impressum.html">Impressum</a>')
-        teile.append(f'<a href="{rel}_wiki/datenschutz.html">Datenschutz</a>')
+        teile.append(f'<a href="{rel}_wiki/impressum.html" target="_blank" rel="noopener">Impressum</a>')
+        teile.append(f'<a href="{rel}_wiki/datenschutz.html" target="_blank" rel="noopener">Datenschutz</a>')
     return '<footer class="produktfuss">' + '<span class="pf-trenner">·</span>'.join(teile) + '</footer>'
 
 
@@ -244,8 +301,8 @@ def rechtstext_html(name: str) -> str:
         "{{VERANTWORTLICH}}": html.escape(imp.get("verantwortlich") or ""), "{{ADRESSE}}": html.escape(imp.get("adresse") or ""),
         "{{KONTAKT}}": html.escape(imp.get("kontakt") or ""), "{{INSTITUTION}}": (html.escape(imp["institution"]) + "<br>") if imp.get("institution") else "",
         "{{LIZENZ}}": html.escape(pr.get("lizenz") or ""), "{{LIZENZ_URL}}": html.escape(pr.get("lizenzUrl") or "#", quote=True),
-        "{{GITHUB_ZEILE}}": (f'Quellcode: <a href="{html.escape(github if github.startswith("http") else "https://github.com/" + github, quote=True)}" rel="noopener">{html.escape(github)}</a><br>' if github else "Quellcode: Veröffentlichung auf GitHub folgt.<br>"),
-        "{{DOI_ZEILE}}": (f'DOI: <a href="{html.escape(doi if doi.startswith("http") else "https://doi.org/" + doi, quote=True)}" rel="noopener">{html.escape(doi)}</a>' if doi else "DOI: folgt."),
+        "{{GITHUB_ZEILE}}": (f'Quellcode: <a href="{html.escape(github if github.startswith("http") else "https://github.com/" + github, quote=True)}" target="_blank" rel="noopener">{html.escape(github)}</a><br>' if github else "Quellcode: Veröffentlichung auf GitHub folgt.<br>"),
+        "{{DOI_ZEILE}}": (f'DOI: <a href="{html.escape(doi if doi.startswith("http") else "https://doi.org/" + doi, quote=True)}" target="_blank" rel="noopener">{html.escape(doi)}</a>' if doi else "DOI: folgt."),
         "{{PRODUKTFUSS}}": produktfuss_html("../"),
     }
     for k, v in ersetzungen.items():

@@ -29,7 +29,7 @@ PROGRAMM_ORDNER = Path(sys.executable).resolve().parent if getattr(sys, "frozen"
 # Mitgelieferte Dateien (static/, templates/ …): beim fertigen Programm im Bundle von PyInstaller
 PROGRAMM_DATEN = Path(getattr(sys, "_MEIPASS", PROGRAMM))
 
-from liloport import beispiel, kompetenzen, links, sanitize  # noqa: E402
+from liloport import abgleich, beispiel, kompetenzen, links, sanitize  # noqa: E402
 from liloport.kompetenzen import Kompetenzen  # noqa: E402
 from liloport.assets import Assets  # noqa: E402
 from liloport.backup import Backup  # noqa: E402
@@ -119,6 +119,17 @@ def server_oeffnen(start: int):
 BREITEN = ("voll", "halb", "klein")
 AUSRICHTUNGEN = ("links", "mitte", "rechts")
 _BREITE_FREI = re.compile(r"^\d{1,4}(px|%)$")
+_FARBE = re.compile(r"^#[0-9a-fA-F]{6}$")
+TRENNER_ARTEN = ("gestrichelt", "gepunktet", "doppelt")
+
+
+def _ganzzahl(wert, kleinste, groesste):
+    """Ganzzahl im Bereich oder None (für optionale Zahlenfelder)."""
+    try:
+        zahl = int(wert)
+    except (TypeError, ValueError):
+        return None
+    return zahl if kleinste <= zahl <= groesste else None
 
 
 def _klapp(b: dict, neu: dict) -> dict:
@@ -131,7 +142,7 @@ def _klapp(b: dict, neu: dict) -> dict:
 
 
 def bloecke_pruefen(bloecke, ids=None, tiefe=0) -> list:
-    """Validiert und filtert die Blöcke einer Seite (text, trenner, bild, video, pdf, spalten, html)."""
+    """Validiert und filtert die Blöcke einer Seite (text, trenner, bild, galerie, video, audio, pdf, spalten, html)."""
     if not isinstance(bloecke, list):
         raise StoreFehler("Blöcke müssen eine Liste sein.")
     ids = ids if ids is not None else set()
@@ -147,8 +158,35 @@ def bloecke_pruefen(bloecke, ids=None, tiefe=0) -> list:
         if typ == "text":
             ergebnis.append({"id": bid, "typ": "text", "html": sanitize.filtern(b.get("html", ""), "profi")})
         elif typ == "trenner":
-            ergebnis.append({"id": bid, "typ": "trenner"})
-        elif typ in ("bild", "video", "pdf", "datei"):
+            neu = {"id": bid, "typ": "trenner"}
+            farbe = str(b.get("farbe") or "")
+            if _FARBE.match(farbe):
+                neu["farbe"] = farbe.lower()
+            dicke = _ganzzahl(b.get("dicke"), 1, 20)
+            if dicke and dicke != 1:
+                neu["dicke"] = dicke
+            if b.get("stil") in TRENNER_ARTEN:
+                neu["stil"] = b["stil"]
+            for feld in ("abstandOben", "abstandUnten"):
+                wert = _ganzzahl(b.get(feld), 0, 200)
+                if wert is not None:
+                    neu[feld] = wert
+            ergebnis.append(neu)
+        elif typ == "galerie":
+            bilder = b.get("bilder")
+            if bilder is not None and not isinstance(bilder, list):
+                raise StoreFehler("Galerie braucht eine Liste von Bildern.")
+            neu_bilder = []
+            for bild in (bilder or [])[:200]:
+                if not isinstance(bild, dict):
+                    continue
+                asset = str(bild.get("asset") or "")
+                if asset and not re.fullmatch(r"[0-9a-f]{8}", asset):
+                    raise StoreFehler("Ungültige Anhang-ID.")
+                neu_bilder.append({"asset": asset, "bildtext": str(bild.get("bildtext") or "")[:300]})
+            ergebnis.append({"id": bid, "typ": "galerie", "bilder": neu_bilder,
+                             "spalten": _ganzzahl(b.get("spalten"), 2, 4) or 3})
+        elif typ in ("bild", "video", "audio", "pdf", "datei"):
             asset = str(b.get("asset") or "")
             if asset and not re.fullmatch(r"[0-9a-f]{8}", asset):
                 raise StoreFehler("Ungültige Anhang-ID.")
@@ -465,6 +503,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"kommentare": self.kommentare.laden(pfad)})
         if teile == ["exporte"]:
             return self._json({"exporte": self.kommentare.exporte()})
+        if teile == ["abgleich"]:
+            # Unterschiede zwischen site.json und dem Inhalte-Ordner (von Hand gelöschte/neue Dateien)
+            return self._json(abgleich.bericht(self.store))
         if teile == ["kompetenzrahmen"]:
             return self._json({"rahmen": self.kompetenzen.liste()})
         if teile[:1] == ["kompetenzrahmen"] and len(teile) == 2:
@@ -577,6 +618,10 @@ class Handler(BaseHTTPRequestHandler):
         if teile == ["rendern"]:
             self.renderer.alles_schreiben()
             return self._json({"ok": True})
+        if teile == ["abgleich"]:
+            ergebnis = abgleich.anwenden(self.store, self.assets)
+            self.renderer.alles_schreiben()
+            return self._json({"ok": True, **ergebnis})
         if teile[:1] == ["seiten"] and len(teile) >= 4 and teile[-1] == "verschieben":
             pfad = "/".join(teile[1:-1])
             neu = self.store.seite_verschieben(pfad, str(daten.get("verzeichnis") or ""))
@@ -586,6 +631,17 @@ class Handler(BaseHTTPRequestHandler):
             self.kommentare.pfade_umbenennen(pfad, neu)
             self.renderer.alles_schreiben()
             return self._json({"ok": True, "pfad": neu})
+        if teile[:1] == ["verzeichnisse"] and len(teile) == 3 and teile[2] == "verschieben":
+            # Verzeichnis samt Inhalt in ein anderes Verzeichnis oder auf die oberste Ebene verschieben
+            self.store.letzte_umbenennung = None
+            v = self.store.verzeichnis_verschieben(teile[1], daten.get("eltern") or None)
+            if self.store.letzte_umbenennung:
+                links.pfade_umbenennen(self.store, *self.store.letzte_umbenennung)
+                self.assets.pfade_umbenennen(*self.store.letzte_umbenennung)
+                self.history.verschieben(*self.store.letzte_umbenennung)
+                self.kommentare.pfade_umbenennen(*self.store.letzte_umbenennung)
+            self.renderer.alles_schreiben()
+            return self._json({"ok": True, "verzeichnis": v})
         if teile[:1] == ["verlauf"] and len(teile) >= 3:
             pfad = "/".join(teile[1:])
             seite = self.history.wiederherstellen(pfad, str(daten.get("v") or ""))

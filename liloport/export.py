@@ -93,7 +93,7 @@ def bereinigen(daten: bytes, endung: str) -> bytes:
 
 
 REINIGBAR = {"jpg", "jpeg", "png", "webp"}
-BEREITS_KOMPRIMIERT = {"jpg", "jpeg", "png", "gif", "webp", "mp4", "webm", "pdf", "zip", "woff2"}
+BEREITS_KOMPRIMIERT = {"jpg", "jpeg", "png", "gif", "webp", "mp4", "webm", "mp3", "m4a", "ogg", "flac", "pdf", "zip", "woff2"}
 STUECK = 1024 * 1024
 
 
@@ -323,6 +323,9 @@ class Exporter:
             inhalt["ABGABE.txt"] = (abgabe_text(stempel["zeit"], stempel["pruefsumme"], titel)
                                     + (MODERATION_AUS_TEXT + "\n" if stempel.get("moderation") == "aus" else "")).encode("utf-8")
         inhalt["style.css"] = (STATIC / "style.css").read_bytes()
+        inhalt["favicon.svg"] = (STATIC / "logo.svg").read_bytes()
+        if (STATIC / "favicon.png").exists():
+            inhalt["favicon.png"] = (STATIC / "favicon.png").read_bytes()
         for schrift in sorted(STATIC.glob("*.woff2")) + sorted(STATIC.glob("OFL-*.txt")):
             inhalt[schrift.name] = schrift.read_bytes()
         inhalt["robots.txt"] = b"User-agent: *\nDisallow: /\n"

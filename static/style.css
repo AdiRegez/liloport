@@ -550,6 +550,8 @@ dialog input[type=search] { width: 100%; box-sizing: border-box; }
 dialog h3 { font-size: 0.95rem; margin: 14px 0 4px; }
 .intern-ziel { align-self: center; }
 .geraet-warnung { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--lp-warn-hell); border: 1px solid var(--lp-pink-dunkel); color: var(--lp-tinte); font-family: var(--schrift); font-size: 0.9rem; }
+.abgleich-hinweis { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+.abgleich-hinweis span { flex: 1 1 320px; }
 .export-warnung { padding: 10px 12px; border-radius: 8px; background: var(--lp-warn-hell); border-left: 3px solid var(--lp-pink-dunkel); font-size: 0.9rem; }
 .export-warnung ul { margin: 4px 0 0; padding-left: 1.2em; }
 .beispiel-karte { margin: 0 0 18px; padding: 16px 18px; border-radius: 14px; background: linear-gradient(120deg, var(--lp-rosa), var(--lp-blau)); color: #3a2e4a; }
@@ -801,3 +803,140 @@ button.kr-b-stufe:hover { border-color: var(--pg-akzent); }
 .baum .verz-zeile:has(.aktionen):hover .verz-anzahl { display: none; }   /* Platz für die Aktionen */
 .dash-tab .wartung summary::before { content: "▸"; width: 12px; color: var(--lp-tinte-2); }
 .dash-tab .wartung details[open] > summary::before { content: "▾"; }
+
+/* ===================== Nach-oben-Knopf (lange Seiten) ===================== */
+.nach-oben {
+  position: fixed; right: 18px; bottom: 44px; z-index: 26;
+  width: 42px; height: 42px; padding: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--pg-rand); background: var(--pg-flaeche); color: var(--pg-akzent-dunkel);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); cursor: pointer;
+}
+.nach-oben:hover { background: var(--pg-akzent-hell); border-color: var(--pg-akzent); }
+.nach-oben[hidden] { display: none; }
+body.dashboard .nach-oben { border-color: var(--lp-rand); background: var(--lp-flaeche); color: var(--lp-akzent-dunkel); }
+body.dashboard .nach-oben:hover { background: var(--lp-flaeche-2); border-color: var(--lp-akzent); }
+@media print { .nach-oben { display: none !important; } }
+
+/* ===================== Audio-Block ===================== */
+.block-audio { margin-left: 0; margin-right: 0; }
+.block-audio audio { width: 100%; display: block; }
+.block-audio figcaption { font-size: 0.86rem; color: var(--pg-text-2); margin-top: 4px; }
+.medien-vorschau audio { width: 100%; min-width: 260px; display: block; }
+
+/* ===================== Galerie (Masonry) ===================== */
+/* CSS-Mehrspaltenlayout: Bilder behalten ihre Proportion und füllen die Spalten von oben nach unten –
+   funktioniert auch im Export und unter file://, ohne JavaScript. */
+.block-galerie { column-gap: 14px; }
+.block-galerie.galerie-2 { column-count: 2; }
+.block-galerie.galerie-3 { column-count: 3; }
+.block-galerie.galerie-4 { column-count: 4; }
+.block-galerie .galerie-bild { break-inside: avoid; margin: 0 0 14px; }
+.block-galerie .galerie-bild img { display: block; width: 100%; height: auto; border-radius: 6px; }
+.block-galerie .galerie-bild figcaption { font-size: 0.82rem; color: var(--pg-text-2); margin-top: 3px; }
+@media (max-width: 700px) {
+  .block-galerie.galerie-3, .block-galerie.galerie-4 { column-count: 2; }
+}
+@media (max-width: 460px) {
+  .block-galerie.galerie-2, .block-galerie.galerie-3, .block-galerie.galerie-4 { column-count: 1; }
+}
+/* Galerie im Editor */
+.galerie-editor { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 10px; }
+.galerie-eintrag { display: flex; flex-direction: column; gap: 5px; padding: 6px; border: 1px solid var(--lp-rand); border-radius: 8px; background: var(--lp-flaeche); }
+.galerie-eintrag img { width: 100%; height: 110px; object-fit: cover; border-radius: 4px; }
+.galerie-eintrag input { font: inherit; font-size: 0.82rem; padding: 3px 6px; border: 1px solid var(--lp-rand); border-radius: 5px; background: var(--lp-flaeche); color: var(--lp-tinte); min-width: 0; }
+.galerie-aktionen { display: flex; gap: 4px; justify-content: flex-end; }
+.galerie-aktionen button { padding: 1px 7px; font-size: 0.8rem; }
+
+/* ===================== Vollbild (Klick auf Galerie- und Bild-Blöcke) ===================== */
+body:not(.bearbeiten) .block-galerie .galerie-bild img,
+body:not(.bearbeiten) .block-bild img { cursor: zoom-in; }
+.vollbild {
+  position: fixed; inset: 0; z-index: 90; padding: 26px 70px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(22, 17, 29, 0.93); outline: 0;
+}
+.vollbild-rahmen { margin: 0; max-width: 100%; max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.vollbild-bild { max-width: 100%; max-height: calc(100vh - 110px); width: auto; height: auto; object-fit: contain; border-radius: 6px; box-shadow: 0 20px 70px rgba(0, 0, 0, 0.6); }
+.vollbild-text { color: #efe9f6; font-size: 0.9rem; text-align: center; min-height: 1.2em; max-width: 70ch; }
+.vollbild-knopf {
+  position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.16); color: #fff;
+  font-size: 1.5rem; line-height: 1; cursor: pointer;
+}
+.vollbild-knopf:hover { background: rgba(255, 255, 255, 0.34); }
+.vollbild-zu { top: 16px; right: 16px; font-size: 1.1rem; }
+.vollbild-vor { left: 13px; top: 50%; transform: translateY(-50%); }
+.vollbild-nach { right: 13px; top: 50%; transform: translateY(-50%); }
+body.vollbild-offen { overflow: hidden; }
+@media (max-width: 700px) {
+  .vollbild { padding: 16px 12px 56px; }
+  .vollbild-vor, .vollbild-nach { top: auto; bottom: 10px; transform: none; }
+  .vollbild-vor { left: calc(50% - 56px); } .vollbild-nach { right: calc(50% - 56px); }
+}
+@media print { .vollbild { display: none !important; } }
+
+/* ===================== Editor: «+» zum Einfügen zwischen Blöcken ===================== */
+.editor-block > .block-einfuegen {
+  position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%); z-index: 6;
+  opacity: 0; transition: opacity 0.12s;
+}
+.editor-block:hover > .block-einfuegen, .editor-block > .block-einfuegen:focus-within { opacity: 1; }
+.editor-block.zu > .block-einfuegen { display: block; }   /* auch bei eingeklappten Blöcken erreichbar */
+.block-einfuegen button {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 17px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--lp-akzent); border: 1px solid var(--lp-akzent); color: #fff;
+  box-shadow: 0 2px 8px rgba(58, 46, 74, 0.3); cursor: pointer;
+}
+.block-einfuegen button:hover { background: var(--lp-akzent-dunkel); border-color: var(--lp-akzent-dunkel); }
+.block-einfuegen-anfang { text-align: center; margin: 0 0 10px; opacity: 0.45; transition: opacity 0.12s; }
+.block-einfuegen-anfang:hover, .block-einfuegen-anfang:focus-within { opacity: 1; }
+.typ-wahl { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ===================== Trenner im Editor ===================== */
+.editor-trenner .trenner-felder { margin-top: 10px; row-gap: 6px; }
+.editor-trenner .trenner-felder .feld-zeile { gap: 5px; }
+.editor-trenner .trenner-felder span { font-size: 0.85rem; color: var(--lp-tinte-2); }
+.editor-trenner input[type=number] { width: 86px; }
+.editor-trenner input[type=color] { width: 44px; height: 28px; padding: 1px 2px; border: 1px solid var(--lp-rand); border-radius: 6px; background: var(--lp-flaeche); cursor: pointer; }
+.editor-trenner .klein-text { margin: 6px 0 0; }
+
+/* ===================== Export-Dialog: Zweck und Gruppen ===================== */
+.zweck-frage { margin: 0 0 6px; font-weight: 600; }
+.zweck-wahl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 14px; }
+@media (max-width: 560px) { .zweck-wahl { grid-template-columns: 1fr; } }
+.zweck-karte { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--lp-rand); border-radius: 10px; background: var(--lp-flaeche); cursor: pointer; }
+.zweck-karte:hover { border-color: var(--lp-akzent); }
+.zweck-karte:has(input:checked) { border-color: var(--lp-akzent); background: var(--lp-flaeche-2); box-shadow: inset 0 0 0 1px var(--lp-akzent); }
+.zweck-karte input { margin-top: 4px; accent-color: var(--lp-akzent); }
+.zweck-karte .zweck-inhalt { display: flex; flex-direction: column; gap: 3px; }
+.zweck-karte .zweck-text { font-size: 0.82rem; color: var(--lp-tinte-2); line-height: 1.45; }
+.export-gruppe { margin: 0 0 10px; padding: 10px 12px 8px; border: 1px solid var(--lp-rand); border-radius: 10px; background: var(--lp-flaeche); }
+.export-gruppe > h3 { margin: 0 0 8px; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--lp-tinte-2); }
+.export-gruppe .feld:last-child { margin-bottom: 4px; }
+.export-gruppe .feld { margin-bottom: 8px; }
+.export-gruppe .nebenbei { margin: 2px 0 8px; }
+.export-gruppe [hidden] { display: none; }
+.export-ergebnis:not(:empty) { margin: 10px 0 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--pg-akzent); background: var(--pg-akzent-hell); color: var(--lp-tinte); }
+.export-ergebnis p:first-child { margin-top: 0; }
+
+/* ===================== Verwaltung: Menü-Anzeige, Portfolio-Export ===================== */
+.menue-uebersicht { padding: 0 0 8px 30px; }
+.menue-uebersicht > p { margin: 2px 0 8px; }
+.menue-tabelle { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+.menue-tabelle th, .menue-tabelle td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--lp-rand); }
+.menue-tabelle th.menue-zelle, .menue-tabelle td.menue-zelle { text-align: center; width: 92px; }
+.menue-tabelle th { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--lp-tinte-2); }
+.menue-tabelle .menue-verz td { font-weight: 600; padding-top: 10px; color: var(--lp-tinte); border-bottom-color: var(--lp-lavendel); }
+.menue-tabelle td.menue-titel a { color: var(--lp-tinte); text-decoration: none; }
+.menue-tabelle td.menue-titel a:hover { text-decoration: underline; }
+.menue-tabelle .menue-status { margin-left: 8px; color: var(--lp-akzent-dunkel); }
+.menue-tabelle input[type=radio] { accent-color: var(--lp-akzent); width: 15px; height: 15px; cursor: pointer; }
+.portfolio-export { padding: 0 0 8px 30px; }
+.portfolio-export p { margin: 2px 0 8px; max-width: 60em; }
+@media (max-width: 700px) {
+  .menue-uebersicht, .portfolio-export { padding-left: 0; }
+  .menue-tabelle th.menue-zelle, .menue-tabelle td.menue-zelle { width: 58px; }
+}

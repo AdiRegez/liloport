@@ -21,7 +21,13 @@ _MAGIC = [
     (b"%PDF", "pdf", "pdf"),
     (b"\x1a\x45\xdf\xa3", "video", "webm"),
     (b"PK\x03\x04", "datei", "zip"),
+    (b"ID3", "audio", "mp3"),
+    (b"OggS", "audio", "ogg"),
+    (b"fLaC", "audio", "flac"),
 ]
+
+# ftyp-Marken (Bytes 8–12 in MP4-Containern), die Audio statt Video bedeuten (m4a)
+_FTYP_AUDIO = (b"M4A ", b"M4B ", b"M4P ")
 
 
 def typ_erkennen(daten: bytes):
@@ -32,12 +38,18 @@ def typ_erkennen(daten: bytes):
             return typ, endung
     if kopf[:4] == b"RIFF" and kopf[8:12] == b"WEBP":
         return "bild", "webp"
+    if kopf[:4] == b"RIFF" and kopf[8:12] == b"WAVE":
+        return "audio", "wav"
     if kopf[4:8] == b"ftyp":
-        return "video", "mp4"
+        return ("audio", "m4a") if kopf[8:12] in _FTYP_AUDIO else ("video", "mp4")
+    # MP3 ohne ID3-Kopf: beginnt direkt mit dem Rahmen-Synchronwort (0xFFEx)
+    if len(kopf) >= 2 and kopf[0] == 0xFF and (kopf[1] & 0xE0) == 0xE0:
+        return "audio", "mp3"
     text = kopf.lstrip().lower()
     if text.startswith(b"<svg") or (text.startswith(b"<?xml") and b"<svg" in daten[:2048].lower()):
         return "bild", "svg"
-    raise StoreFehler("Dateityp nicht erlaubt. Erlaubt: jpg, png, gif, webp, svg, mp4, webm, pdf, zip.")
+    raise StoreFehler("Dateityp nicht erlaubt. Erlaubt: jpg, png, gif, webp, svg, mp4, webm, "
+                      "mp3, wav, ogg, m4a, flac, pdf, zip.")
 
 
 class Assets:
@@ -155,11 +167,15 @@ class Assets:
 
     @staticmethod
     def ids_in_bloecken(bloecke) -> set:
-        """Sammelt Asset-IDs aus Blöcken, auch in Spalten."""
+        """Sammelt Asset-IDs aus Blöcken, auch in Spalten und Galerien."""
         ids = set()
         for b in bloecke or []:
-            if b.get("typ") in ("bild", "video", "pdf", "datei") and b.get("asset"):
+            if b.get("typ") in ("bild", "video", "audio", "pdf", "datei") and b.get("asset"):
                 ids.add(b["asset"])
+            if b.get("typ") == "galerie":
+                for bild in b.get("bilder", []):
+                    if isinstance(bild, dict) and bild.get("asset"):
+                        ids.add(bild["asset"])
             if b.get("typ") == "spalten":
                 for spalte in b.get("spalten", []):
                     ids |= Assets.ids_in_bloecken(spalte)

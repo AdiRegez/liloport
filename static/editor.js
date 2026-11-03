@@ -59,7 +59,7 @@
   function blockVonId(id) { return objekte[id]; }
 
   function typName(typ) {
-    return { text: 'Text', bild: 'Bild', video: 'Video', pdf: 'PDF', datei: 'ZIP-Datei', button: 'Button', trenner: 'Trenner', spalten: 'Spalten', html: 'HTML', kr: 'Kompetenzen' }[typ] || typ;
+    return { text: 'Text', bild: 'Bild', galerie: 'Galerie', video: 'Video', audio: 'Audio', pdf: 'PDF', datei: 'ZIP-Datei', button: 'Button', trenner: 'Trenner', spalten: 'Spalten', html: 'HTML', kr: 'Kompetenzen' }[typ] || typ;
   }
   var AUSRICHTUNGEN = [['links', 'links'], ['mitte', 'zentriert'], ['rechts', 'rechts']];
   function ausrichtungSelect(b) {
@@ -132,6 +132,7 @@
 
     var liste = el('div', { id: 'block-liste', 'class': 'block-liste' });
     main.appendChild(liste);
+    liste.appendChild(einfuegenAnfang(liste));
     bloecke.forEach(function (b) { liste.appendChild(blockElement(b)); });
     if (!bloecke.length) liste.appendChild(leerHinweis());
     ablageZone(liste);
@@ -255,42 +256,91 @@
     return el('p', { 'class': 'leer-hinweis', text: 'Noch keine Blöcke. Unten einen Block hinzufügen.' });
   }
 
-  function hinzufuegenLeiste(spaltenListe) {
-    var typen = ['text', 'bild', 'video', 'pdf', 'datei', 'button', 'trenner'];
+  function blockTypen(inSpalte) {
+    /* Welche Blocktypen gerade zur Wahl stehen (Niveau, Spalten-Kontext, Kompetenzrahmen). */
+    var typen = ['text', 'bild', 'video', 'audio', 'pdf', 'datei', 'button', 'trenner'];
+    if (profi) typen.splice(2, 0, 'galerie');   // Galerie (Masonry) nur im Profi-Niveau
     if (rahmenListe.length) typen.push('kr');
-    if (!spaltenListe) typen.push('spalten');
+    if (!inSpalte) typen.push('spalten');
     if (profi) typen.push('html');
+    return typen;
+  }
+
+  function hinzufuegenLeiste(spaltenListe) {
     var leiste = el('div', { 'class': 'block-hinzufuegen' }, [el('span', { text: spaltenListe ? '+' : 'Block hinzufügen:' })]);
-    typen.forEach(function (t) {
+    blockTypen(!!spaltenListe).forEach(function (t) {
       leiste.appendChild(el('button', { 'class': 'klein', text: (spaltenListe ? '' : '+ ') + typName(t), onclick: function () { blockHinzufuegen(t, spaltenListe); } }));
     });
     return leiste;
   }
 
-  function blockHinzufuegen(typ, spaltenListe) {
+  function neuerBlock(typ) {
     var b = { id: neueId(), typ: typ };
     if (typ === 'text') b.html = '<p><br></p>';
     if (typ === 'bild') { b.asset = ''; b.bildtext = ''; b.breite = 'voll'; b.ausrichtung = 'links'; }
-    if (typ === 'video' || typ === 'pdf' || typ === 'datei') b.asset = '';
+    if (typ === 'galerie') { b.bilder = []; b.spalten = 3; }
+    if (typ === 'video' || typ === 'audio' || typ === 'pdf' || typ === 'datei') b.asset = '';
     if (typ === 'button') { b.text = ''; b.ziel = ''; b.stil = 'voll'; b.ausrichtung = 'links'; }
     if (typ === 'pdf') b.hoehe = 600;
     if (typ === 'html') b.html = '';
     if (typ === 'spalten') b.spalten = [[], []];
     if (typ === 'kr') { b.rahmen = rahmenListe.length === 1 ? rahmenListe[0].id : ''; b.knoten = {}; }
+    return b;
+  }
+
+  function blockHinzufuegen(typ, spaltenListe) {
     var zielListe = spaltenListe || document.getElementById('block-liste');
     var leer = zielListe.querySelector(':scope > .leer-hinweis'); if (leer) leer.remove();
-    var e = blockElement(b);
+    var e = blockElement(neuerBlock(typ));
     zielListe.appendChild(e);
     geaendert();
     var t = e.querySelector('.editor-text, textarea');
     if (t) t.focus();
   }
 
+  function blockTypDialog(inSpalte, beiWahl) {
+    /* Kleine Auswahl aller Blocktypen – für die «+»-Knöpfe zwischen den Blöcken. */
+    var d = L.dialog('Welcher Block soll eingefügt werden?', [
+      el('div', { 'class': 'typ-wahl' }, blockTypen(inSpalte).map(function (t) {
+        return el('button', { type: 'button', text: typName(t), onclick: function () { d.close(); beiWahl(t); } });
+      }))
+    ], 'Schliessen', function () {});
+    d.querySelector('button[type=submit]').style.display = 'none';
+  }
+
+  function blockEinfuegenNach(box) {
+    /* Fügt direkt nach diesem Block einen neuen ein – ohne den Umweg über die Leiste ganz unten. */
+    blockTypDialog(box.parentNode.classList.contains('spalte'), function (typ) {
+      var e = blockElement(neuerBlock(typ));
+      box.parentNode.insertBefore(e, box.nextSibling);
+      geaendert();
+      try { e.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (ex) { /* egal */ }
+      var t = e.querySelector('.editor-text, textarea');
+      if (t) t.focus();
+    });
+  }
+
+  function einfuegenAnfang(liste) {
+    /* Einfügepunkt ganz oben: Neuer Inhalt zuoberst, ohne einen Block nach oben schieben zu müssen. */
+    return el('div', { 'class': 'block-einfuegen block-einfuegen-anfang' }, [
+      el('button', { type: 'button', text: '+', title: 'Neuen Block ganz oben einfügen', 'aria-label': 'Neuen Block ganz oben einfügen', onclick: function () {
+        blockTypDialog(false, function (typ) {
+          var leer = liste.querySelector(':scope > .leer-hinweis'); if (leer) leer.remove();
+          var e = blockElement(neuerBlock(typ));
+          liste.insertBefore(e, liste.querySelector(':scope > .editor-block'));
+          geaendert();
+          var t = e.querySelector('.editor-text, textarea');
+          if (t) t.focus();
+        });
+      } })
+    ]);
+  }
+
   // ---------- Block-Element ----------
 
   function blockElement(b) {
     objekte[b.id] = b;
-    var gesperrt = !profi && b.typ === 'html';
+    var gesperrt = !profi && (b.typ === 'html' || b.typ === 'galerie');
     var zuKnopf = el('button', { 'class': 'klapp', text: '▾', title: 'Block einklappen', 'aria-expanded': 'true' });
     var zusammenfassung = el('span', { 'class': 'zusammenfassung' });
     // Aktionen in einer eigenen Gruppe: In schmalen Blöcken (Spalten) klappt sie hinter «⋯» und erscheint
@@ -334,8 +384,10 @@
       text.addEventListener('paste', einfuegenAlsText);
       box.appendChild(text);
     } else if (b.typ === 'trenner') {
-      box.appendChild(el('div', { 'class': 'editor-trenner' }, [el('hr')]));
-    } else if (b.typ === 'bild' || b.typ === 'video' || b.typ === 'pdf' || b.typ === 'datei') {
+      box.appendChild(trennerBereich(b));
+    } else if (b.typ === 'galerie') {
+      box.appendChild(galerieBereich(b));
+    } else if (b.typ === 'bild' || b.typ === 'video' || b.typ === 'audio' || b.typ === 'pdf' || b.typ === 'datei') {
       box.appendChild(medienBereich(b, box));
     } else if (b.typ === 'button') {
       box.appendChild(buttonBereich(b));
@@ -350,6 +402,10 @@
     } else if (b.typ === 'kr') {
       box.appendChild(krBereich(b));
     }
+    // «+» am unteren Rand: fügt direkt nach diesem Block einen neuen ein (erscheint beim Überfahren)
+    box.appendChild(el('div', { 'class': 'block-einfuegen' }, [
+      el('button', { type: 'button', text: '+', title: 'Neuen Block direkt danach einfügen', 'aria-label': 'Neuen Block direkt danach einfügen', onclick: function () { blockEinfuegenNach(box); } })
+    ]));
     dragUndDrop(box);
     return box;
   }
@@ -412,7 +468,8 @@
     if (b.typ === 'text' || b.typ === 'html') { var d = document.createElement('div'); d.innerHTML = b.html || ''; t = (d.textContent || '').trim(); }
     else if (b.typ === 'button') t = b.text || '';
     else if (b.typ === 'bild') t = b.bildtext || (assetCache[b.asset] || {}).name || '';
-    else if (b.typ === 'video' || b.typ === 'pdf' || b.typ === 'datei') t = (assetCache[b.asset] || {}).name || '';
+    else if (b.typ === 'galerie') t = (b.bilder || []).length + ' Bilder';
+    else if (b.typ === 'video' || b.typ === 'audio' || b.typ === 'pdf' || b.typ === 'datei') t = (assetCache[b.asset] || {}).name || '';
     else if (b.typ === 'spalten') t = b.spalten.length + ' Spalten, ' + b.spalten.reduce(function (n, s) { return n + s.length; }, 0) + ' Blöcke';
     else if (b.typ === 'kr') t = Object.keys(b.knoten || {}).length + ' Kompetenzen gewählt';
     return t.length > 70 ? t.slice(0, 70) + '…' : t;
@@ -446,6 +503,7 @@
 
   function vorschauHtml(b) {
     if (b.typ === 'html') return '<pre class="code-vorschau">' + (b.html || '').replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>';
+    if (b.typ === 'galerie') return '<p class="hinweis">Galerie (Masonry) mit ' + (b.bilder || []).length + ' Bildern.</p>';
     if (b.typ === 'spalten') return '<p class="hinweis">' + b.spalten.length + ' Spalten mit ' + b.spalten.reduce(function (n, s) { return n + s.length; }, 0) + ' Blöcken.</p>';
     return '';
   }
@@ -637,6 +695,7 @@
       var vorschau;
       if (b.typ === 'bild') vorschau = el('img', { src: rel + a.datei, alt: '' });
       else if (b.typ === 'video') vorschau = el('video', { src: rel + a.datei, controls: '' });
+      else if (b.typ === 'audio') vorschau = el('audio', { src: rel + a.datei, controls: '', preload: 'metadata' });
       else if (b.typ === 'datei') vorschau = el('div', { 'class': 'datei-vorschau', text: '🗜 ' + a.name + ' (' + groesse(a.groesse) + ') – auf der Seite öffnet ein Klick den Ordner der Datei' });
       else vorschau = el('div', { 'class': 'pdf-vorschau', text: '📄 ' + a.name + ' (' + groesse(a.groesse) + ')' });
       var felder = el('div', { 'class': 'medien-felder' });
@@ -703,7 +762,9 @@
   function groesse(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB'; }
 
   function auswahlBereich(b, fertig) {
-    var akzeptiert = { bild: 'image/*', video: 'video/mp4,video/webm', pdf: 'application/pdf', datei: '.zip,application/zip' }[b.typ];
+    var akzeptiert = { bild: 'image/*', video: 'video/mp4,video/webm',
+      audio: 'audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,audio/wav,audio/flac,.mp3,.m4a,.ogg,.oga,.wav,.flac',
+      pdf: 'application/pdf', datei: '.zip,application/zip' }[b.typ];
     var datei = el('input', { type: 'file', accept: akzeptiert });
     var status = el('span', { 'class': 'klein-text' });
     var zone = el('div', { 'class': 'ablage-zone' }, [
@@ -763,7 +824,7 @@
     if (!passend.length) return el('p', { 'class': 'hinweis', text: 'Noch keine passende Datei vorhanden.' });
     passend.forEach(function (a) {
       var eintrag = el('button', { 'class': 'asset-eintrag', type: 'button' }, [
-        a.typ === 'bild' ? el('img', { src: rel + a.datei, alt: '' }) : el('span', { 'class': 'asset-symbol', text: a.typ === 'pdf' ? '📄' : '🎞' }),
+        a.typ === 'bild' ? el('img', { src: rel + a.datei, alt: '' }) : el('span', { 'class': 'asset-symbol', text: a.typ === 'pdf' ? '📄' : a.typ === 'audio' ? '🎵' : '🎞' }),
         el('span', { 'class': 'asset-name', text: a.name }),
         el('span', { 'class': 'klein-text', text: 'Heimat: ' + a.heimat })
       ]);
@@ -771,6 +832,149 @@
       liste.appendChild(eintrag);
     });
     return liste;
+  }
+
+  // ---------- Trenner: Farbe, Dicke, Linienart, Abstand ----------
+
+  var TRENNER_ARTEN = [['', 'durchgezogen'], ['gestrichelt', 'gestrichelt'], ['gepunktet', 'gepunktet'], ['doppelt', 'doppelt']];
+  var TRENNER_CSS = { gestrichelt: 'dashed', gepunktet: 'dotted', doppelt: 'double' };
+  var TRENNER_STANDARDFARBE = '#e3dccf';   // var(--pg-rand) hell; nur als Vorbelegung des Farbwählers
+
+  function trennerBereich(b) {
+    var hr = el('hr');
+    function vorschau() {
+      var art = TRENNER_CSS[b.stil] || 'solid';
+      var dicke = parseInt(b.dicke, 10) || 1;
+      if (art === 'double' && dicke < 3) dicke = 3;
+      hr.style.border = '0';
+      hr.style.borderTop = dicke + 'px ' + art + ' ' + (b.farbe || 'var(--pg-rand)');
+      hr.style.marginTop = b.abstandOben === undefined ? '' : b.abstandOben + 'px';
+      hr.style.marginBottom = b.abstandUnten === undefined ? '' : b.abstandUnten + 'px';
+    }
+    var farbe = el('input', { type: 'color', value: /^#[0-9a-fA-F]{6}$/.test(b.farbe || '') ? b.farbe : TRENNER_STANDARDFARBE, title: 'Farbe der Linie' });
+    farbe.addEventListener('input', function () { b.farbe = farbe.value; vorschau(); geaendertVerzoegert(); });
+    var farbeWeg = el('button', { 'class': 'klein', type: 'button', text: 'Standardfarbe', title: 'Zurück zur Standardfarbe der Seite', onclick: function () {
+      delete b.farbe; farbe.value = TRENNER_STANDARDFARBE; vorschau(); geaendert();
+    } });
+    var art = el('select', null, TRENNER_ARTEN.map(function (x) { return el('option', { value: x[0], text: x[1] }); }));
+    art.value = TRENNER_CSS[b.stil] ? b.stil : '';
+    art.addEventListener('change', function () { if (art.value) b.stil = art.value; else delete b.stil; vorschau(); geaendert(); });
+    var dicke = el('input', { type: 'number', min: '1', max: '20', step: '1', value: b.dicke || 1, title: 'Dicke der Linie in Pixel' });
+    dicke.addEventListener('input', function () {
+      var n = parseInt(dicke.value, 10);
+      if (n > 1 && n <= 20) b.dicke = n; else delete b.dicke;
+      vorschau(); geaendertVerzoegert();
+    });
+    function abstandFeld(schluessel, titel) {
+      var feldEl = el('input', { type: 'number', min: '0', max: '200', step: '2', placeholder: 'Standard', title: titel });
+      if (b[schluessel] !== undefined) feldEl.value = b[schluessel];
+      feldEl.addEventListener('input', function () {
+        var n = parseInt(feldEl.value, 10);
+        if (feldEl.value !== '' && n >= 0 && n <= 200) b[schluessel] = n; else delete b[schluessel];
+        vorschau(); geaendertVerzoegert();
+      });
+      return feldEl;
+    }
+    var oben = abstandFeld('abstandOben', 'Abstand zum Block davor in Pixel (leer = Standard)');
+    var unten = abstandFeld('abstandUnten', 'Abstand zum Block danach in Pixel (leer = Standard)');
+    vorschau();
+    return el('div', { 'class': 'editor-trenner' }, [
+      hr,
+      el('div', { 'class': 'medien-felder trenner-felder' }, [
+        el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Farbe:' }), farbe, farbeWeg]),
+        el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Linienart:' }), art]),
+        el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Dicke:' }), dicke, el('span', { text: 'px' })]),
+        el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Abstand oben:' }), oben, el('span', { text: 'px' })]),
+        el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Abstand unten:' }), unten, el('span', { text: 'px' })])
+      ]),
+      el('p', { 'class': 'klein-text', text: 'Abstand oben/unten vergrössert oder verkleinert die Distanz zum vorherigen bzw. nächsten Block. Leer = Standardabstand.' })
+    ]);
+  }
+
+  // ---------- Galerie (Masonry, Profi) ----------
+
+  function dateiHochladen(f, status) {
+    /* Lädt eine Datei hoch (XMLHttpRequest mit Fortschritt, kein Grössenlimit); gibt Promise mit dem Asset. */
+    return new Promise(function (ok, nein) {
+      var x = new XMLHttpRequest();
+      x.open('POST', '/api/upload/' + pfad);
+      x.setRequestHeader('Content-Type', 'application/octet-stream');
+      x.setRequestHeader('X-Dateiname', encodeURIComponent(f.name));
+      x.upload.onprogress = function (ev) {
+        if (ev.lengthComputable && status) status.textContent = f.name + ' lädt hoch … ' + Math.floor(ev.loaded * 100 / ev.total) + ' %';
+      };
+      x.onload = function () {
+        try {
+          var j = JSON.parse(x.responseText);
+          if (j.fehler) return nein(new Error(j.fehler));
+          assetCache[j.asset.id] = j.asset;
+          ok(j.asset);
+        } catch (e) { nein(new Error('Antwort unlesbar')); }
+      };
+      x.onerror = function () { nein(new Error('Verbindung unterbrochen')); };
+      x.send(f);
+    });
+  }
+
+  function galerieBereich(b) {
+    var bereich = el('div', { 'class': 'medien-bereich galerie-bereich' });
+    b.bilder = b.bilder || [];
+    var spaltenWahl = el('select', null, [2, 3, 4].map(function (n) { return el('option', { value: String(n), text: n + ' Spalten' }); }));
+    spaltenWahl.value = String(b.spalten >= 2 && b.spalten <= 4 ? b.spalten : 3);
+    spaltenWahl.addEventListener('change', function () { b.spalten = parseInt(spaltenWahl.value, 10); geaendert(); });
+    var status = el('span', { 'class': 'klein-text' });
+    var raster = el('div', { 'class': 'galerie-editor' });
+    function zeichnen() {
+      raster.innerHTML = '';
+      b.bilder.forEach(function (bild, i) {
+        var a = assetCache[bild.asset];
+        var bt = el('input', { type: 'text', placeholder: 'Bildtext (optional)', value: bild.bildtext || '', maxlength: '300' });
+        bt.addEventListener('input', function () { bild.bildtext = bt.value; geaendertVerzoegert(); });
+        raster.appendChild(el('div', { 'class': 'galerie-eintrag' }, [
+          a ? el('img', { src: rel + a.datei, alt: '' }) : el('span', { 'class': 'asset-symbol', text: '🖼' }),
+          bt,
+          el('span', { 'class': 'galerie-aktionen' }, [
+            el('button', { type: 'button', text: '◀', title: 'Nach vorne', onclick: function () { if (i > 0) { b.bilder.splice(i - 1, 0, b.bilder.splice(i, 1)[0]); zeichnen(); geaendert(); } } }),
+            el('button', { type: 'button', text: '▶', title: 'Nach hinten', onclick: function () { if (i < b.bilder.length - 1) { b.bilder.splice(i + 1, 0, b.bilder.splice(i, 1)[0]); zeichnen(); geaendert(); } } }),
+            el('button', { type: 'button', 'class': 'gefahr', text: '✕', title: 'Aus der Galerie entfernen (die Datei bleibt erhalten)', onclick: function () { b.bilder.splice(i, 1); zeichnen(); geaendert(); } })
+          ])
+        ]));
+      });
+      if (!b.bilder.length) raster.appendChild(el('p', { 'class': 'hinweis', text: 'Noch keine Bilder. Die Galerie zeigt Bilder im Masonry-Layout: in Spalten, jedes Bild in seiner Originalproportion.' }));
+    }
+    var datei = el('input', { type: 'file', accept: 'image/*', multiple: '' });
+    datei.style.display = 'none';
+    datei.addEventListener('change', function () {
+      var dateien = [].slice.call(datei.files);
+      datei.value = '';
+      dateien.reduce(function (kette, f) {
+        return kette.then(function () { return dateiHochladen(f, status); }).then(function (a) {
+          if (a.typ !== 'bild') { status.textContent = f.name + ' ist kein Bild und wurde nicht aufgenommen (liegt unter «Nicht verwendete Dateien»).'; return; }
+          b.bilder.push({ asset: a.id, bildtext: '' });
+          zeichnen(); geaendert();
+          status.textContent = '';
+        });
+      }, Promise.resolve()).catch(function (e) { status.textContent = 'Fehler: ' + e.message; });
+    });
+    var hochladen = el('button', { type: 'button', 'class': 'klein', text: '+ Bilder hochladen', title: 'Eine oder mehrere Bilddateien wählen', onclick: function () { datei.click(); } });
+    var vorhandene = el('button', { type: 'button', 'class': 'klein', text: '+ Vorhandenes Bild', onclick: function () {
+      var passend = Object.keys(assetCache).map(function (k) { return assetCache[k]; }).filter(function (a) { return a.typ === 'bild'; });
+      if (!passend.length) { alert('Noch keine Bilder hochgeladen.'); return; }
+      var liste = el('div', { 'class': 'asset-liste' });
+      passend.forEach(function (a) {
+        var eintrag = el('button', { 'class': 'asset-eintrag', type: 'button' }, [
+          el('img', { src: rel + a.datei, alt: '' }),
+          el('span', { 'class': 'asset-name', text: a.name })
+        ]);
+        eintrag.addEventListener('click', function () { b.bilder.push({ asset: a.id, bildtext: '' }); zeichnen(); geaendert(); d.close(); });
+        liste.appendChild(eintrag);
+      });
+      var d = L.dialog('Bild für die Galerie wählen', [liste], 'Schliessen', function () {});
+    } });
+    zeichnen();
+    bereich.appendChild(el('div', { 'class': 'medien-felder' }, [spaltenWahl, hochladen, vorhandene, status, datei]));
+    bereich.appendChild(raster);
+    return bereich;
   }
 
   // ---------- Spalten ----------
@@ -907,6 +1111,33 @@
       geaendert();
     });
   }
+
+  /* ---------- Automatisches Scrollen beim Ziehen ----------
+     Nähert sich der gezogene Block dem oberen oder unteren Fensterrand, scrollt die Seite von selbst –
+     so lässt sich ein Block auch auf einer langen Seite von ganz unten nach ganz oben ziehen. */
+
+  var autoScrollY = null, autoScrollRaf = null;
+
+  function autoScrollSchritt() {
+    autoScrollRaf = null;
+    if (autoScrollY === null) return;
+    var oben = 150, unten = 110, max = 28, h = window.innerHeight, dy = 0;
+    if (autoScrollY < oben) dy = -Math.ceil((oben - autoScrollY) / oben * max);
+    else if (autoScrollY > h - unten) dy = Math.ceil((autoScrollY - (h - unten)) / unten * max);
+    if (dy) {
+      window.scrollBy(0, dy);
+      autoScrollRaf = requestAnimationFrame(autoScrollSchritt);
+    }
+  }
+
+  document.addEventListener('dragover', function (ev) {
+    if (!gezogen) return;
+    autoScrollY = ev.clientY;
+    if (!autoScrollRaf) autoScrollRaf = requestAnimationFrame(autoScrollSchritt);
+  });
+  ['drop', 'dragend'].forEach(function (name) {
+    document.addEventListener(name, function () { autoScrollY = null; });
+  });
 
   // ---------- Speichern ----------
 

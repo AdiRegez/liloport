@@ -126,15 +126,23 @@ class Importer:
         return self.store.verzeichnis_anlegen(name, eltern_id)["id"]
 
     def importieren(self, token: str, verzeichnis_id: str, titel: str = None) -> str:
-        """Legt die Seite(n) an, lädt Anhänge hoch, führt Kommentare zusammen; gibt den Pfad der ersten Seite zurück."""
+        """Legt die Seite(n) an, lädt Anhänge hoch, führt Kommentare zusammen; gibt den Pfad der ersten Seite zurück.
+
+        Ohne verzeichnis_id («– oberste Ebene –») wird ein neues Verzeichnis auf oberster Ebene angelegt,
+        benannt nach dem Export (bzw. dem gewählten Titel); so lassen sich Verzeichnis- und
+        Portfolio-Exporte als Ganzes einfügen."""
         if not token or not all(c in "0123456789abcdef" for c in token):
             raise StoreFehler("Ungültiger Import.")
         datei = self.ordner / f"{token}.zip"
         if not datei.exists():
             raise StoreFehler("Der Import ist abgelaufen; bitte die ZIP erneut wählen.")
-        self.store.verzeichnis(self.store.site_laden(), verzeichnis_id)  # Ziel muss existieren
         z, wurzel, info = self._lesen(datei)
         try:
+            if not verzeichnis_id:
+                name = str(titel or info.get("titel") or "Import").strip()[:80] or "Import"
+                verzeichnis_id = self.store.verzeichnis_anlegen(name)["id"]
+            else:
+                self.store.verzeichnis(self.store.site_laden(), verzeichnis_id)  # Ziel muss existieren
             erste = self._anlegen(z, wurzel, info, verzeichnis_id, titel)
         finally:
             z.close()   # Windows: erst nach dem Schliessen lässt sich die abgelegte ZIP löschen
@@ -256,6 +264,10 @@ def _asset_ids(bloecke) -> set:
         if isinstance(b, dict):
             if b.get("asset"):
                 ids.add(b["asset"])
+            if b.get("typ") == "galerie":
+                for bild in b.get("bilder") or []:
+                    if isinstance(bild, dict) and bild.get("asset"):
+                        ids.add(bild["asset"])
             if b.get("typ") == "spalten":
                 for sp in b.get("spalten") or []:
                     ids |= _asset_ids(sp)
@@ -299,7 +311,7 @@ def _anzahl(bloecke, typ=None) -> int:
     return n
 
 
-_TYPEN = {"text", "trenner", "bild", "video", "pdf", "datei", "spalten", "html", "button", "kr"}
+_TYPEN = {"text", "trenner", "bild", "galerie", "video", "audio", "pdf", "datei", "spalten", "html", "button", "kr"}
 
 
 def _entschaerfen(bloecke) -> list:
@@ -320,6 +332,9 @@ def _entschaerfen(bloecke) -> list:
             b = dict(block_pruefen(b, str(b.get("id") or "b")), **{k: b[k] for k in ("klapp", "klappTitel") if k in b})
         if b["typ"] == "button" and str(b.get("ziel") or "").strip().lower().startswith(("javascript:", "data:", "vbscript:")):
             b["ziel"] = ""
+        if b["typ"] == "galerie":
+            b["bilder"] = [{"asset": str(x.get("asset") or ""), "bildtext": str(x.get("bildtext") or "")[:300]}
+                           for x in (b.get("bilder") or []) if isinstance(x, dict)]
         if b["typ"] == "spalten":
             b["spalten"] = [_entschaerfen(sp) for sp in (b.get("spalten") or []) if isinstance(sp, list)]
         ergebnis.append(b)
@@ -332,8 +347,11 @@ def _bloecke_umschreiben(bloecke, zuordnung, info_anhaenge=None) -> list:
     ergebnis = []
     for b in bloecke or []:
         b = dict(b)
-        if b.get("typ") in ("bild", "video", "pdf", "datei"):
+        if b.get("typ") in ("bild", "video", "audio", "pdf", "datei"):
             b["asset"] = zuordnung.get(b.get("asset"), ("", ""))[0]
+        if b.get("typ") == "galerie":
+            b["bilder"] = [dict(x, asset=zuordnung.get(x.get("asset"), ("", ""))[0])
+                           for x in (b.get("bilder") or []) if isinstance(x, dict)]
         if b.get("typ") == "html":
             for alt_id, (neu_id, neu_datei) in zuordnung.items():
                 alt_datei = (info_anhaenge.get(alt_id) or {}).get("datei", "")

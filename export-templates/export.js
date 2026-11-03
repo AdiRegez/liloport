@@ -631,6 +631,71 @@
       .catch(function (e) { fertig(); alert('Herunterladen fehlgeschlagen: ' + e.message); });
   }
 
+  /* ---------- Vollbild für Bilder (Galerie und Bild-Blöcke); gleiche Bedienung wie in Liloport ---------- */
+
+  function vollbildAnzeigen(liste, start) {
+    var i = start;
+    var bild = el('img', { 'class': 'vollbild-bild', alt: '' });
+    var text = el('div', { 'class': 'vollbild-text' });
+    var mehrere = liste.length > 1;
+    var zu = el('button', { 'class': 'vollbild-knopf vollbild-zu', type: 'button', title: 'Schliessen (Esc)', 'aria-label': 'Vollbild schliessen', text: '✕' });
+    var vor = el('button', { 'class': 'vollbild-knopf vollbild-vor', type: 'button', title: 'Vorheriges Bild (←)', 'aria-label': 'Vorheriges Bild', text: '‹' });
+    var nach = el('button', { 'class': 'vollbild-knopf vollbild-nach', type: 'button', title: 'Nächstes Bild (→)', 'aria-label': 'Nächstes Bild', text: '›' });
+    var rahmen = el('figure', { 'class': 'vollbild-rahmen' }, [bild, text]);
+    var huelle = el('div', { 'class': 'vollbild', role: 'dialog', 'aria-label': 'Bild in Vollansicht', tabindex: '-1' },
+      [zu, mehrere ? vor : null, rahmen, mehrere ? nach : null]);
+    bild.addEventListener('load', function () {
+      // Kleine Bilder moderat vergrössern (höchstens aufs Doppelte); grosse begrenzt das CSS
+      if (!bild.naturalWidth) return;
+      var maxB = Math.max(200, window.innerWidth - 150), maxH = Math.max(200, window.innerHeight - 130);
+      var faktor = Math.min(2, maxB / bild.naturalWidth, maxH / bild.naturalHeight);
+      bild.style.width = faktor > 1 ? Math.round(bild.naturalWidth * faktor) + 'px' : '';
+    });
+    function zeigen(n) {
+      i = (n + liste.length) % liste.length;
+      bild.style.width = '';
+      bild.src = liste[i].src;
+      var b = liste[i].beschriftung || '';
+      text.textContent = mehrere ? b + (b ? ' · ' : '') + (i + 1) + ' / ' + liste.length : b;
+    }
+    function schliessen() {
+      document.removeEventListener('keydown', tasten);
+      document.body.classList.remove('vollbild-offen');
+      huelle.remove();
+    }
+    function tasten(ev) {
+      if (ev.key === 'Escape') schliessen();
+      else if (ev.key === 'ArrowLeft' && mehrere) zeigen(i - 1);
+      else if (ev.key === 'ArrowRight' && mehrere) zeigen(i + 1);
+      else return;
+      ev.preventDefault();
+    }
+    zu.addEventListener('click', schliessen);
+    vor.addEventListener('click', function (ev) { ev.stopPropagation(); zeigen(i - 1); });
+    nach.addEventListener('click', function (ev) { ev.stopPropagation(); zeigen(i + 1); });
+    huelle.addEventListener('click', function (ev) { if (ev.target === huelle || ev.target === rahmen) schliessen(); });
+    document.addEventListener('keydown', tasten);
+    zeigen(i);
+    document.body.classList.add('vollbild-offen');
+    document.body.appendChild(huelle);
+    huelle.focus();
+  }
+
+  function vollbild() {
+    document.addEventListener('click', function (ev) {
+      var img = ev.target.closest && ev.target.closest('.block-galerie .galerie-bild img, .block-bild img');
+      if (!img || img.closest('a')) return;
+      ev.preventDefault();
+      var galerie = img.closest('.block-galerie');
+      var alle = galerie ? [].slice.call(galerie.querySelectorAll('.galerie-bild img')) : [img];
+      var liste = alle.map(function (x) {
+        var fig = x.closest('figure'), cap = fig && fig.querySelector('figcaption');
+        return { src: x.currentSrc || x.src, beschriftung: (cap ? cap.textContent : x.alt) || '' };
+      });
+      vollbildAnzeigen(liste, Math.max(0, alle.indexOf(img)));
+    });
+  }
+
   function init() {
     var leiste = document.querySelector('.export-leiste');
     if (leiste && !leiste.dataset.bereit) {
@@ -640,6 +705,7 @@
       leiste.appendChild(knopf);
     }
     moderationLesen();   // auch auf der Startseite eines Portfolios (dort gibt es keine Kommentare)
+    if (!document.body.dataset.vollbildBereit) { document.body.dataset.vollbildBereit = '1'; vollbild(); }
     if (document.getElementById('kommentare') || document.querySelector('.kr-beurteilung')) kommentareLaden().then(formular);
     else if (moderation && !document.getElementById('moderation-band')) {
       var inhalt = document.getElementById('inhalt');

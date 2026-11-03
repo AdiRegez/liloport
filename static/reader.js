@@ -95,32 +95,64 @@
         liste.push({ name: s.pfad && !e.portfolio ? k : start, zeit: e.zeit, moderation: e.moderation, portfolio: e.portfolio, titel: e.titel });
       });
       liste.sort(function (a, b) { return String(b.zeit).localeCompare(String(a.zeit)); });
-      if (!liste.length) { box.hidden = true; return; }
+      if (!liste.length) { box.dataset.leer = '1'; box.hidden = true; return; }
       liste.slice(0, 10).forEach(function (e) {
         box.appendChild(el('div', { 'class': 'klein-text' }, [el('span', { text: String(e.zeit).replace('T', ' ').slice(0, 16) + (e.portfolio ? ' · im Portfolio «' + e.titel + '»' : '') })]));
         box.appendChild(moderationsZeile(e.name, e.moderation));
       });
-    }).catch(function () { box.hidden = true; });
+    }).catch(function () { box.dataset.leer = '1'; box.hidden = true; });
     return box;
   }
 
   function dialogExport(s) {
-    /* s: {pfad, titel} für eine Seite oder {verzeichnis: id|'' , titel} für ein Verzeichnis / das ganze Portfolio */
+    /* s: {pfad, titel} für eine Seite oder {verzeichnis: id|'' , titel} für ein Verzeichnis / das ganze Portfolio.
+       Der Dialog fragt zuerst nach dem Zweck (Weitergeben als ZIP oder Webserver) und zeigt nur, was dazu passt:
+       der Moderations-Link zum Beispiel nützt nur auf einem Webserver. */
     var mehrere = !s.pfad;
     api('GET', '/api/export-einstellungen').then(function (einst) {
+
+      /* ---- Zweck: Weitergeben oder Webserver ---- */
+      var zweck = 'weitergabe';
+      try { zweck = localStorage.getItem('liloport-export-zweck') || 'weitergabe'; } catch (e) { /* egal */ }
+      if (zweck !== 'webserver') zweck = 'weitergabe';
+      function zweckKarte(wert, symbol, titel, text) {
+        var radio = el('input', { type: 'radio', name: 'export-zweck', value: wert });
+        var karte = el('label', { 'class': 'zweck-karte' }, [
+          radio,
+          el('span', { 'class': 'zweck-inhalt' }, [
+            el('strong', null, [document.createTextNode(symbol + ' ' + titel)]),
+            el('span', { 'class': 'zweck-text', text: text })
+          ])
+        ]);
+        radio.addEventListener('change', function () { if (radio.checked) { zweck = wert; try { localStorage.setItem('liloport-export-zweck', wert); } catch (e) { /* egal */ } anpassen(); } });
+        return { el: karte, radio: radio };
+      }
+      var kWeiter = zweckKarte('weitergabe', '📨', 'Weitergeben als ZIP',
+        'Per E-Mail, USB-Stick oder Chat. Die andere Person entpackt die ZIP und doppelklickt «Seite öffnen» – lesen und kommentieren geht direkt im Browser, ohne Internet und Zusatzprogramm. Kommentare kommen per «Herunterladen» als ZIP zurück.');
+      var kServer = zweckKarte('webserver', '🌐', 'Auf einem Webserver veröffentlichen',
+        'Der Ordner «inhalt» aus der ZIP kommt auf den Server (z. B. Webspace der Hochschule). Die Dateinamen sind zufällig: Nur wer den Link kennt, findet die Seite; Suchmaschinen sind ausgeschlossen.');
+      (zweck === 'webserver' ? kServer : kWeiter).radio.checked = true;
+      var zweckWahl = el('div', { 'class': 'zweck-wahl', role: 'radiogroup', 'aria-label': 'Wofür ist der Export?' }, [kWeiter.el, kServer.el]);
+
+      /* ---- Angaben auf den Seiten ---- */
       var autor = el('input', { type: 'text', value: einst.autor || '', placeholder: 'Name, der angezeigt werden darf', maxlength: '120' });
       var ident = el('input', { type: 'text', value: einst.id || '', placeholder: 'ID-Nummer, Matrikelnummer etc.', maxlength: '60' });
       var autorAn = kreuz('Anzeigename auf den Seiten zeigen', einst.autorAnzeigen !== false && !!einst.autor);
       var idAn = kreuz('ID-Nummer auf den Seiten zeigen', !!einst.idAnzeigen && !!einst.id);
-      var profilHinweis = el('div', { 'class': 'nebenbei', text: 'Vorbelegt aus dem Profil im Dashboard. Änderungen hier werden dort übernommen.' });
+      var profilHinweis = el('div', { 'class': 'nebenbei', text: 'Vorbelegt aus dem Profil im Dashboard. Änderungen hier werden dort übernommen. Autor, Zeitstempel und Bild-Metadaten (EXIF) werden entfernt, sofern hier nicht eingeschaltet.' });
       var datumAn = kreuz('Datum der Seite anzeigen', einst.datumAnzeigen);
-      var kommentare = kreuz('Kommentare erlauben', true, 'Besucher können auf der Seite kommentieren. Gespeichert wird auf dem Server über PHP oder Python; ohne beides bleiben Kommentare im Browser der kommentierenden Person und kommen über «Herunterladen» zurück.');
+
+      /* ---- Kommentare ---- */
+      var kommentare = kreuz('Kommentare erlauben', true, 'Wer die Seite öffnet, kann kommentieren (Name freiwillig).');
+      var kommentarHinweis = el('div', { 'class': 'nebenbei' });
+      var modAn = kreuz('Moderations-Link erzeugen', true, 'Mit dem Moderations-Link kannst du auf dem Server alle Kommentare bearbeiten und löschen.');
+      var modHinweis = el('div', { 'class': 'nebenbei' });
+
+      /* ---- Abgabe und Passwortschutz ---- */
       var abgabe = kreuz('Als Abgabe kennzeichnen (Datum und Prüfsumme)', false, 'Zeigt auf der Seite den Zeitpunkt des Exports und eine Prüfsumme. Liloport erkennt beim Import, ob der Inhalt seither verändert wurde.');
       var abgabeHinweis = el('div', { 'class': 'nebenbei', text: 'Die Prüfsumme belegt, dass der Inhalt seit dem Export unverändert ist. Damit auch der Zeitpunkt belegt ist: die Prüfsumme bei der Abgabe zusätzlich angeben (z. B. im Abgabeformular). Sie steht auch in der Datei ABGABE.txt. Seiten mit Kompetenz-Block werden zugleich zur Bewertung freigegeben: Unter den Kompetenzen erscheint eine Beurteilung mit wählbarer Skala (0–1 bis 0–10) und Kommentar; sie braucht «Kommentare erlauben».' });
       abgabeHinweis.hidden = true;
       abgabe.box.addEventListener('change', function () { abgabeHinweis.hidden = !abgabe.box.checked; });
-      var modAn = kreuz('Moderations-Link erzeugen', true, 'Mit dem Moderations-Link kannst du auf dem Server alle Kommentare bearbeiten und löschen.');
-      var modHinweis = el('div', { 'class': 'nebenbei' });
       function modAbgleichen() {
         var ab = abgabe.box.checked;
         modAn.box.disabled = ab || !kommentare.box.checked;
@@ -134,39 +166,62 @@
       abgabe.box.addEventListener('change', function () { if (abgabe.box.checked) modVorher = modAn.box.checked; else modAn.box.checked = modVorher; modAbgleichen(); });
       kommentare.box.addEventListener('change', modAbgleichen);
       modAbgleichen();
-      var pwAn = kreuz('Passwortschutz', false, 'Inhalt wird im Browser entschlüsselt; braucht https:// auf dem Server');
+      var pwAn = kreuz('Passwortschutz', false, 'Der Inhalt wird verschlüsselt und erst im Browser nach Eingabe des Passworts entschlüsselt.');
       var pw1 = el('input', { type: 'password', placeholder: 'Passwort', autocomplete: 'new-password' });
       var pw2 = el('input', { type: 'password', placeholder: 'Passwort wiederholen', autocomplete: 'new-password' });
       var pwFelder = el('div', { 'class': 'feld-zeile' }, [pw1, pw2]); pwFelder.style.display = 'none';
       var pwWarnung = el('div', { 'class': 'export-hinweis-pw', role: 'note' }, [
         el('strong', { text: 'Nicht wieder importierbar: ' }),
-        el('span', { text: 'Eine passwortgeschützte ZIP lässt sich nicht in Liloport zurückholen – weder die Seite noch die Kommentare. Wer Kommentare oder Beurteilungen zurück in Liloport holen möchte, exportiert ohne Passwort.' })
+        el('span', { text: 'Eine passwortgeschützte ZIP lässt sich nicht in Liloport zurückholen – weder die Seite noch die Kommentare. Wer Kommentare oder Beurteilungen zurück in Liloport holen möchte, exportiert ohne Passwort. Auf einem Webserver braucht die Entschlüsselung https://.' })
       ]);
       pwWarnung.hidden = true;
       pwAn.box.addEventListener('change', function () { pwFelder.style.display = pwAn.box.checked ? '' : 'none'; pwWarnung.hidden = !pwAn.box.checked; });
+
       var ergebnis = el('div', { 'class': 'export-ergebnis' });
       var warnung = el('div', { 'class': 'export-warnung' }, [
-        el('strong', { text: 'Vor dem Veröffentlichen prüfen: Personen und Fallbeispiele' }),
+        el('strong', { text: 'Vor dem Weitergeben prüfen: Personen und Fallbeispiele' }),
         el('ul', null, [
-          el('li', { text: 'Fotos, Namen oder Aussagen von anderen Personen nur mit deren Einverständnis veröffentlichen.' }),
+          el('li', { text: 'Fotos, Namen oder Aussagen von anderen Personen nur mit deren Einverständnis weitergeben.' }),
           el('li', { text: 'Fallbeispiele aus Praktikum oder Praxis (z. B. Schule, Pflege, Soziale Arbeit) nur anonymisiert: keine Namen, Orte, Daten oder Details, die auf eine Person schliessen lassen.' }),
           el('li', { text: 'Im Zweifel den Passwortschutz einschalten.' })
         ])
       ]);
       var umfang = mehrere
-        ? (s.verzeichnis ? 'Das Verzeichnis mit allen Unterverzeichnissen' : 'Das ganze Portfolio') + ' wird zu einer Website mit Inhaltsverzeichnis als Startseite; interne Links zwischen den Seiten funktionieren.'
+        ? (s.verzeichnis ? 'Das Verzeichnis mit allen Unterverzeichnissen' : 'Das ganze Portfolio') + ' wird zu einer kleinen Website mit Inhaltsverzeichnis als Startseite; interne Links zwischen den Seiten funktionieren.'
         : 'Die ZIP enthält die Seite ohne Liloport-Leiste und Menü und nur ihre eigenen Anhänge. Interne Links auf andere Seiten werden zu einfachem Text.';
+
+      function gruppe(titel, kinder) {
+        return el('div', { 'class': 'export-gruppe' }, [el('h3', { text: titel })].concat(kinder));
+      }
+      var frueher = fruehereExporte(s);
+      var gruppeKommentare = gruppe('Kommentare', [kommentare.el, kommentarHinweis, modAn.el, modHinweis]);
+      var gruppeAngaben = gruppe('Angaben auf den Seiten', [feld('Anzeigename', autor), autorAn.el, feld('ID-Nummer', ident), idAn.el, datumAn.el, profilHinweis]);
+      var gruppeSchutz = gruppe('Abgabe und Schutz', [abgabe.el, abgabeHinweis, pwAn.el, pwFelder, pwWarnung,
+        el('div', { 'class': 'nebenbei', text: 'Ein vergessenes Passwort kann nicht wiederhergestellt werden.' })]);
+
+      function anpassen() {
+        /* Zeigt nur, was zum gewählten Zweck passt. */
+        var server = zweck === 'webserver';
+        modAn.el.hidden = !server; modHinweis.hidden = !server;
+        frueher.hidden = !server || frueher.dataset.leer === '1';
+        kommentarHinweis.textContent = server
+          ? 'Kann der Server PHP oder Python (comments.php / comments.py liegen in der ZIP), sehen alle Besucher die Kommentare. Sonst bleiben sie im Browser der kommentierenden Person und kommen über «Herunterladen» zurück.'
+          : 'Kommentare bleiben im Browser der Person, die kommentiert. Über «Herunterladen» auf der Seite schickt sie dir die ZIP samt Kommentaren zurück; «Dashboard › Neu › Aus ZIP importieren» holt sie nach Liloport.';
+      }
+      anpassen();
+
       dialog('«' + s.titel + '» exportieren', [
-        el('p', { 'class': 'hinweis', text: umfang + ' Die Dateinamen sind zufällig: Nur wer die Adresse kennt, findet die Seite. Suchmaschinen werden ausgeschlossen. Autor, Zeitstempel und Bild-Metadaten werden entfernt, sofern nicht eingeschaltet.' }),
+        el('p', { 'class': 'hinweis', text: umfang }),
+        el('p', { 'class': 'zweck-frage', text: 'Wofür ist der Export?' }),
+        zweckWahl,
         warnung,
-        kommentare.el, modAn.el, modHinweis,
-        feld('Anzeigename', autor), autorAn.el, feld('ID-Nummer', ident), idAn.el, profilHinweis, datumAn.el,
-        abgabe.el, abgabeHinweis,
-        pwAn.el, pwFelder, pwWarnung, el('div', { 'class': 'nebenbei', text: 'Ein vergessenes Passwort kann nicht wiederhergestellt werden.' }),
+        gruppeKommentare, gruppeAngaben, gruppeSchutz,
         ergebnis,
-        fruehereExporte(s)
+        frueher
       ], 'ZIP herunterladen', function () {
-        var optionen = { autor: autor.value, id: ident.value, autorAnzeigen: autorAn.box.checked, idAnzeigen: idAn.box.checked, datumAnzeigen: datumAn.box.checked, kommentare: kommentare.box.checked, abgabe: abgabe.box.checked, moderation: modAn.box.checked && !abgabe.box.checked };
+        var server = zweck === 'webserver';
+        var optionen = { autor: autor.value, id: ident.value, autorAnzeigen: autorAn.box.checked, idAnzeigen: idAn.box.checked, datumAnzeigen: datumAn.box.checked, kommentare: kommentare.box.checked, abgabe: abgabe.box.checked,
+          moderation: server && modAn.box.checked && !abgabe.box.checked };
         if (pwAn.box.checked) {
           if (pw1.value.length < 4) throw new Error('Das Passwort braucht mindestens 4 Zeichen.');
           if (pw1.value !== pw2.value) throw new Error('Die Passwörter stimmen nicht überein.');
@@ -184,18 +239,23 @@
               var a = el('a', { href: URL.createObjectURL(blob), download: name ? name[1] : 'export.zip' });
               document.body.appendChild(a); a.click(); a.remove();
               ergebnis.innerHTML = '';
-              ergebnis.appendChild(el('p', null, [el('strong', { text: 'Heruntergeladen. ' }), el('span', { text: (mehrere ? 'Die Startseite' : 'Die Seite') + ' heisst auf dem Server: ' }), el('code', { text: zufall + '.html' }),
-                el('button', { 'class': 'klein', type: 'button', text: 'Kopieren', onclick: function () { navigator.clipboard && navigator.clipboard.writeText(zufall + '.html'); } })]));
-              if (!moderation && kommentare.box.checked) {
-                ergebnis.appendChild(el('p', { 'class': 'klein-text', text: abgabe.box.checked
-                  ? 'Moderation ausgeschaltet (Abgabe): Kommentare und Beurteilungen kann nur ändern oder löschen, wer sie geschrieben hat.'
-                  : 'Ohne Moderations-Link exportiert.' }));
+              ergebnis.appendChild(el('p', null, [el('strong', { text: '✓ ZIP heruntergeladen' + (name ? ': ' : '.') }), name ? el('code', { text: name[1] }) : null]));
+              if (!server) {
+                ergebnis.appendChild(el('p', { 'class': 'klein-text', text: 'Die ZIP kannst du so weitergeben – per E-Mail, USB-Stick oder Chat. Die andere Person entpackt sie (Windows: Rechtsklick › «Alle extrahieren…») und doppelklickt «Seite öffnen».' }));
+                if (kommentare.box.checked) ergebnis.appendChild(el('p', { 'class': 'klein-text', text: 'Kommentare und Beurteilungen kommen über «Herunterladen» (unten auf der Seite) als ZIP zurück und lassen sich im Dashboard über «Neu › Aus ZIP importieren» wieder einlesen.' }));
+              } else {
+                ergebnis.appendChild(el('p', null, [el('span', { text: 'Entpacken und den Ordner «inhalt» auf den Webserver kopieren (die LIESMICH.txt erklärt die Schritte). ' + (mehrere ? 'Die Startseite' : 'Die Seite') + ' heisst dort: ' }), el('code', { text: zufall + '.html' }),
+                  el('button', { 'class': 'klein', type: 'button', text: 'Kopieren', onclick: function () { navigator.clipboard && navigator.clipboard.writeText(zufall + '.html'); } })]));
+                if (!moderation && kommentare.box.checked) {
+                  ergebnis.appendChild(el('p', { 'class': 'klein-text', text: abgabe.box.checked
+                    ? 'Moderation ausgeschaltet (Abgabe): Kommentare und Beurteilungen kann nur ändern oder löschen, wer sie geschrieben hat.'
+                    : 'Ohne Moderations-Link exportiert.' }));
+                }
+                if (moderation) {
+                  ergebnis.appendChild(moderationsZeile(zufall, moderation));
+                  ergebnis.appendChild(el('p', { 'class': 'klein-text', text: 'Mit diesem Link kannst du auf dem Server alle Kommentare bearbeiten und löschen: an die Adresse des Ordners anhängen, z. B. https://dein-server/ordner/' + zufall + '.html#moderation=… Nicht weitergeben. Liloport merkt ihn sich unter «Frühere Exporte».' }));
+                }
               }
-              if (moderation) {
-                ergebnis.appendChild(moderationsZeile(zufall, moderation));
-                ergebnis.appendChild(el('p', { 'class': 'klein-text', text: 'Mit diesem Link kannst du auf dem Server alle Kommentare bearbeiten und löschen: an die Adresse des Ordners anhängen, z. B. https://dein-server/ordner/' + zufall + '.html#moderation=… Nicht weitergeben. Liloport merkt ihn sich unter «Frühere Exporte».' }));
-              }
-              ergebnis.appendChild(el('p', { 'class': 'klein-text', text: 'Entpacken, den Ordner auf den Webserver kopieren – die LIESMICH.txt im Ordner erklärt die Schritte.' }));
               throw { bleiben: true };
             });
           });
@@ -367,8 +427,29 @@
     var w = document.getElementById('seiten-werkzeuge');
     if (!w || istDashboard || !istLokalerServer || body.dataset.vorschau) return;
     var pfad = body.dataset.pfad, titel = (document.getElementById('seitentitel') || {}).textContent || pfad;
-    w.appendChild(el('button', { type: 'button', text: 'Exportieren', title: 'Diese Seite als ZIP für einen Webserver', onclick: function () { dialogExport({ pfad: pfad, titel: titel }); } }));
+    w.appendChild(el('button', { type: 'button', text: 'Exportieren', title: 'Diese Seite als ZIP weitergeben oder auf einen Webserver stellen', onclick: function () { dialogExport({ pfad: pfad, titel: titel }); } }));
     w.appendChild(el('button', { type: 'button', 'class': 'primaer', text: 'Bearbeiten', id: 'bearbeiten-knopf', onclick: editorLaden }));
+  }
+
+  /* ---------- Nach-oben-Knopf ---------- */
+
+  function nachObenKnopf() {
+    /* Erscheint beim Scrollen unten rechts und bringt einen schnell wieder nach ganz oben –
+       praktisch auf langen Seiten, wo «Bearbeiten» und «Exportieren» oben stehen. */
+    var knopf = el('button', { 'class': 'nach-oben', type: 'button', title: 'Nach oben', 'aria-label': 'Nach oben scrollen', hidden: '' });
+    knopf.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">'
+      + '<path d="M5 14.5 12 7.5l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    knopf.addEventListener('click', function () {
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
+    });
+    document.body.appendChild(knopf);
+    var sichtbar = false;
+    function pruefen() {
+      var zeigen = (window.scrollY || document.documentElement.scrollTop || 0) > 400;
+      if (zeigen !== sichtbar) { sichtbar = zeigen; knopf.hidden = !zeigen; }
+    }
+    window.addEventListener('scroll', pruefen, { passive: true });
+    pruefen();
   }
 
   function editorLaden() {
@@ -407,6 +488,74 @@
     });
   }
 
+  /* ---------- Vollbild für Bilder (Galerie und Bild-Blöcke) ----------
+     Ein Klick auf ein Bild öffnet es in voller Grösse; in Galerien lässt sich mit ‹ › und den
+     Pfeiltasten blättern. Schliessen mit ✕, Escape oder Klick auf den Hintergrund. */
+
+  function vollbildAnzeigen(liste, start) {
+    var i = start;
+    var bild = el('img', { 'class': 'vollbild-bild', alt: '' });
+    var text = el('div', { 'class': 'vollbild-text' });
+    var mehrere = liste.length > 1;
+    var zu = el('button', { 'class': 'vollbild-knopf vollbild-zu', type: 'button', title: 'Schliessen (Esc)', 'aria-label': 'Vollbild schliessen', text: '✕' });
+    var vor = el('button', { 'class': 'vollbild-knopf vollbild-vor', type: 'button', title: 'Vorheriges Bild (←)', 'aria-label': 'Vorheriges Bild', text: '‹' });
+    var nach = el('button', { 'class': 'vollbild-knopf vollbild-nach', type: 'button', title: 'Nächstes Bild (→)', 'aria-label': 'Nächstes Bild', text: '›' });
+    var rahmen = el('figure', { 'class': 'vollbild-rahmen' }, [bild, text]);
+    var huelle = el('div', { 'class': 'vollbild', role: 'dialog', 'aria-label': 'Bild in Vollansicht', tabindex: '-1' },
+      [zu, mehrere ? vor : null, rahmen, mehrere ? nach : null]);
+    bild.addEventListener('load', function () {
+      // Kleine Bilder moderat vergrössern (höchstens aufs Doppelte); grosse begrenzt das CSS
+      if (!bild.naturalWidth) return;
+      var maxB = Math.max(200, window.innerWidth - 150), maxH = Math.max(200, window.innerHeight - 130);
+      var faktor = Math.min(2, maxB / bild.naturalWidth, maxH / bild.naturalHeight);
+      bild.style.width = faktor > 1 ? Math.round(bild.naturalWidth * faktor) + 'px' : '';
+    });
+    function zeigen(n) {
+      i = (n + liste.length) % liste.length;
+      bild.style.width = '';
+      bild.src = liste[i].src;
+      var b = liste[i].beschriftung || '';
+      text.textContent = mehrere ? b + (b ? ' · ' : '') + (i + 1) + ' / ' + liste.length : b;
+    }
+    function schliessen() {
+      document.removeEventListener('keydown', tasten);
+      body.classList.remove('vollbild-offen');
+      huelle.remove();
+    }
+    function tasten(ev) {
+      if (ev.key === 'Escape') schliessen();
+      else if (ev.key === 'ArrowLeft' && mehrere) zeigen(i - 1);
+      else if (ev.key === 'ArrowRight' && mehrere) zeigen(i + 1);
+      else return;
+      ev.preventDefault();
+    }
+    zu.addEventListener('click', schliessen);
+    vor.addEventListener('click', function (ev) { ev.stopPropagation(); zeigen(i - 1); });
+    nach.addEventListener('click', function (ev) { ev.stopPropagation(); zeigen(i + 1); });
+    huelle.addEventListener('click', function (ev) { if (ev.target === huelle || ev.target === rahmen) schliessen(); });
+    document.addEventListener('keydown', tasten);
+    zeigen(i);
+    body.classList.add('vollbild-offen');
+    body.appendChild(huelle);
+    huelle.focus();
+  }
+
+  function vollbild() {
+    document.addEventListener('click', function (ev) {
+      if (body.classList.contains('bearbeiten')) return;   // im Editor nicht
+      var img = ev.target.closest && ev.target.closest('.block-galerie .galerie-bild img, .block-bild img');
+      if (!img || img.closest('a')) return;
+      ev.preventDefault();
+      var galerie = img.closest('.block-galerie');
+      var alle = galerie ? [].slice.call(galerie.querySelectorAll('.galerie-bild img')) : [img];
+      var liste = alle.map(function (x) {
+        var fig = x.closest('figure'), cap = fig && fig.querySelector('figcaption');
+        return { src: x.currentSrc || x.src, beschriftung: (cap ? cap.textContent : x.alt) || '' };
+      });
+      vollbildAnzeigen(liste, Math.max(0, alle.indexOf(img)));
+    });
+  }
+
   /* ---------- Ordner-Links (PDF, ZIP-Dateien) ---------- */
 
   function ordnerLinks() {
@@ -432,6 +581,8 @@
   leiste();
   menueAufbauen();
   werkzeuge();
+  nachObenKnopf();
+  vollbild();
   ordnerLinks();
   kompetenzSchalter();
   if (istLokalerServer && location.hash === '#bearbeiten' && !istDashboard) editorLaden();

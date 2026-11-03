@@ -5,6 +5,7 @@ const S=require('fs').mkdtempSync(require('path').join(require('os').tmpdir(),'l
   const errors=[]; page.on('pageerror', e=>errors.push(e.message)); page.on('dialog', d=>d.accept());
   await page.goto(B+'/'); await page.waitForSelector('#beispiel-karte'); await page.click('#beispiel-karte button:has-text("Beispiel anlegen")'); await page.waitForURL(/willkommen/);
   await page.goto(B+'/beispiel-portfolio/semester-1/lernjournal.html'); await page.click('#seiten-werkzeuge button:has-text("Exportieren")'); await page.waitForSelector('dialog .export-warnung');
+  await page.check('dialog .zweck-karte input[value="webserver"]');   // Moderations-Link gibt es nur beim Zweck Webserver
   await page.click('dialog label:has-text("Als Abgabe")');
   console.log('Dialog: Moderation bei Abgabe gesperrt', await page.isDisabled('dialog label:has-text("Moderations-Link") input'), '| angehakt', await page.isChecked('dialog label:has-text("Moderations-Link") input'));
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('dialog button[type=submit]')]); await dl.saveAs(S+'/b1.zip');

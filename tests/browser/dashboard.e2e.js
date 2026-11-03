@@ -56,6 +56,12 @@ const B = process.argv[2] || 'http://127.0.0.1:8782';
   ok('Seite gelöscht', !(await page.locator('.seite-zeile:has-text("Erste Seite")').count()));
   z = await zeile('Altes'); await z.locator('button:has-text("Löschen")').click(); await page.waitForTimeout(500);
   ok('Verzeichnis gelöscht', !(await page.locator('.verz-zeile:has-text("Altes")').count()));
-  await page.click('.ordner-zeile button:has-text("Ganzes Portfolio")').catch(()=>{}); 
+  // «Ganzes Portfolio exportieren» steht neu im Reiter «Verwaltung»
+  await page.click('#reiter-verwaltung');
+  const pexp = page.locator('#tab-verwaltung details', {hasText:'Ganzes Portfolio exportieren'});
+  ok('Portfolio-Export unter Verwaltung', await pexp.count() === 1);
+  await pexp.locator('summary').click();
+  await pexp.locator('button:has-text("Ganzes Portfolio exportieren")').click();
+  ok('Portfolio-Export → Dialog', await da('dialog .zweck-wahl')); await page.click('dialog button:has-text("Abbrechen")');
   console.log('Fehler:', errors); await browser.close();
 })().catch(e=>{console.log('TESTFEHLER', e.message); process.exit(1);});

@@ -122,9 +122,15 @@ class Suche:
                         texte.append(html_zu_text(b.get("html", "")))  # Fussnoten sind <span>: ihr Text ist dabei
                     if b.get("typ") == "bild" and b.get("bildtext"):
                         texte.append(b["bildtext"])
+                    if b.get("typ") == "galerie":
+                        for bild in b.get("bilder", []):
+                            if bild.get("bildtext"):
+                                texte.append(bild["bildtext"])
+                            if bild.get("asset") in registry:
+                                anhaenge.append(registry[bild["asset"]]["name"])
                     if b.get("typ") == "button" and b.get("text"):
                         texte.append(b["text"])
-                    if b.get("typ") in ("bild", "video", "pdf", "datei") and b.get("asset") in registry:
+                    if b.get("typ") in ("bild", "video", "audio", "pdf", "datei") and b.get("asset") in registry:
                         e = registry[b["asset"]]
                         anhaenge.append(e["name"])
                         if b["typ"] == "pdf" and pdfs.get(b["asset"]):

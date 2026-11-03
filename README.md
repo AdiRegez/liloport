@@ -18,10 +18,11 @@ others can read and comment on without installing anything, competences can be m
 everything stays on your machine. The user interface is in German. Installers for Windows, macOS and Linux
 are on the [Releases page](https://github.com/AdiRegez/liloport/releases). License: MIT.
 
-Funktionen: Dashboard, Verzeichnisse, Seiten mit Text, Bild, Video, PDF, ZIP-Datei, Button, Spalten, HTML
-und Seiten-CSS; Amateur/Profi; Anhänge mit Löschlogik; Weiterleitungen; Export mit Passwortschutz und
-Kommentaren; Abgabe mit Prüfsumme; Kompetenzrahmen und -abbildung; Profil; Volltextsuche inkl.
-PDF-Inhalten; automatisches Speichern, Undo/Redo, Verlauf, Papierkorb, Backups.
+Funktionen: Dashboard, Verzeichnisse (auch verschieben), Seiten mit Text, Bild, Galerie (Masonry), Video,
+Audio, PDF, ZIP-Datei, Button, gestaltbaren Trennern, Spalten, HTML und Seiten-CSS; Amateur/Profi;
+Anhänge mit Löschlogik; Weiterleitungen; Export mit Passwortschutz und Kommentaren; Abgabe mit Prüfsumme;
+Kompetenzrahmen und -abbildung; Profil; Volltextsuche inkl. PDF-Inhalten; automatisches Speichern,
+Undo/Redo, Verlauf, Papierkorb, Backups.
 
 **Zitieren:** Regez, A. Liloport – Lifelong-Learning-Portfolio [Software]. Zenodo. https://doi.org/10.5281/zenodo.23725695
 (der DOI führt immer zur neuesten Version; «Cite this repository» rechts auf GitHub liefert weitere Formate).
@@ -132,10 +133,20 @@ Liloport/                     Inhalte-Ordner (gehört der Person, nicht dem Prog
 
 Der Schalter **Amateur / Profi** in der Liloport-Leiste gilt global. Amateur bietet Text (H1 bis H3,
 Fett/Kursiv/Unterstrichen, Listen, Zitat, Ausrichtung, Link), Bild (mit Breite und Ausrichtung), Video,
-PDF, ZIP-Datei, Button mit Link, Trenner und Spalten (2 bis 4); Blöcke lassen sich per Drag und Drop
-verschieben, auch in Spalten hinein, sowie einklappen und duplizieren. Profi schaltet rohe HTML-Blöcke,
-Seiten-CSS (automatisch auf die Seite eingegrenzt), H4, Code, Farbe, Tabellen und freie Bildbreiten frei. Ein Wechsel verliert keine Daten: HTML-Blöcke bleiben im Amateur-Niveau
-sichtbar, nur gesperrt. PDF- und ZIP-Blöcke öffnen per Klick den Ordner, in dem die Datei liegt.
+Audio (MP3, WAV, OGG, M4A, FLAC – wie Videos ohne Grössenlimit), PDF, ZIP-Datei, Button mit Link,
+Trenner und Spalten (2 bis 4); Blöcke lassen sich per Drag und Drop verschieben, auch in Spalten hinein,
+sowie einklappen und duplizieren. Trenner sind gestaltbar: Farbe, Dicke, Linienart (durchgezogen,
+gestrichelt, gepunktet, doppelt) und Abstand zum Block davor und danach. Profi schaltet rohe HTML-Blöcke,
+Seiten-CSS (automatisch auf die Seite eingegrenzt), H4, Code, Farbe, Tabellen, freie Bildbreiten und die
+**Galerie** frei: mehrere Bilder im Masonry-Layout (2 bis 4 Spalten, Bilder in Originalproportion, je mit
+Bildtext), das auch im Export und im Lesemodus ohne JavaScript funktioniert. Ein Klick auf ein Bild
+(Galerie oder Bild-Block) öffnet es im **Vollbild**; in Galerien lässt sich mit ‹ › und den Pfeiltasten
+blättern – auch auf exportierten Seiten. Ein Wechsel verliert keine
+Daten: HTML- und Galerie-Blöcke bleiben im Amateur-Niveau sichtbar, nur gesperrt. PDF- und ZIP-Blöcke
+öffnen per Klick den Ordner, in dem die Datei liegt. Auf langen Seiten erscheint beim Scrollen unten
+rechts ein Nach-oben-Knopf. Im Editor erscheint beim Überfahren eines Blocks ein «+», das direkt
+danach einen neuen Block einfügt (ganz oben gibt es einen eigenen Einfügepunkt), und beim Ziehen eines
+Blocks an den Fensterrand scrollt die Seite von selbst.
 
 ## Anhänge
 
@@ -146,8 +157,11 @@ Weiterleitungen entfernt werden. Nicht mehr verwendete Dateien listet das Dashbo
 
 ## Exportieren und weitergeben
 
-«Exportieren» (auf der Seite oder im Dashboard, in beiden Niveaus gleich) erzeugt eine ZIP. Entpackt
-enthält sie oben nur zwei Dinge:
+«Exportieren» (auf der Seite oder im Dashboard, in beiden Niveaus gleich) erzeugt eine ZIP. Der Dialog
+fragt zuerst nach dem Zweck: **Weitergeben als ZIP** (per E-Mail, USB-Stick oder Chat; die andere Person
+entpackt und doppelklickt «Seite öffnen») oder **auf einem Webserver veröffentlichen** – nur dann
+erscheinen Servername und Moderations-Link, denn ohne Webserver gibt es dort nichts zu moderieren.
+Entpackt enthält die ZIP oben nur zwei Dinge:
 
 ```
 export-lernjournal-2026-10-26/
@@ -166,7 +180,8 @@ Im Ordner `inhalt` liegen die Seite (ohne Liloport-Leiste und Menü), nur ihre e
 `style.css` mit den Schriften, `robots.txt`, `manifest.json`, `dateien.html` und eine `LIESMICH.txt`.
 Weitergeben geht damit auch ohne Webserver: ZIP per E-Mail oder USB-Stick, die andere Person öffnet
 «Seite öffnen», kommentiert und schickt über «Herunterladen» die ZIP mit ihren Kommentaren zurück. Im Dashboard lässt sich auch ein **Verzeichnis** (mit allen
-Unterverzeichnissen) oder das **ganze Portfolio** exportieren: Dann gibt es eine Startseite mit
+Unterverzeichnissen) oder das **ganze Portfolio** (Reiter «Verwaltung»; bei grossen Portfolios kann das
+einige Minuten dauern) exportieren: Dann gibt es eine Startseite mit
 Inhaltsverzeichnis, jede Seite hat «‹ vorherige · nächste ›», und interne Links zwischen den
 exportierten Seiten funktionieren (Links auf nicht exportierte Seiten werden zu Text). Der Dialog
 erinnert daran, Personen und Fallbeispiele nur mit Einverständnis bzw. anonymisiert zu veröffentlichen.
@@ -225,12 +240,15 @@ die Datei ausführbar und der Ordner beschreibbar sein; die ZIP setzt das Ausfü
 - Uploads haben kein Grössenlimit und werden stückweise auf die Platte geschrieben.
 - Eigene Profi-HTML-Blöcke dürfen Skript enthalten. Darum keinen HTML-Code aus unbekannten Quellen einfügen.
 
-## Zurück nach Liloport: Seite aus ZIP importieren
+## Zurück nach Liloport: aus ZIP importieren
 
-Dashboard → **Neu** → **Seite aus ZIP importieren**: Die Export-ZIP oder der heruntergeladene Ordner
+Dashboard → **Neu** → **Aus ZIP importieren**: Die Export-ZIP oder der heruntergeladene Ordner
 (gezippt) wird gelesen, eine Vorschau zeigt Titel, Blöcke, Anhänge, Kommentare und – falls vorhanden –
-ob der Abgabestempel noch stimmt; dann wählt man Verzeichnis und Titel. Verzeichnis- und Portfolio-
+ob der Abgabestempel noch stimmt; dann wählt man das Ziel. Verzeichnis- und Portfolio-
 Exporte legen alle Seiten an und bilden die Unterverzeichnisse nach; interne Links bleiben erhalten.
+Als Ziel lässt sich auch **«neues Verzeichnis auf oberster Ebene»** wählen: Dann legt Liloport ein
+Verzeichnis mit dem Namen des Exports an und fügt alles dort ein – so kommt ein exportiertes Verzeichnis
+als Ganzes zurück ins Portfolio, auch in ein noch leeres.
 So lassen sich auch Vorlagen weitergeben, etwa von Dozierenden oder der Hochschule. Die Seite wird neu angelegt, Anhänge werden übernommen, Kommentare erscheinen
 unter der Seite. Grundlage ist die Datei `liloport.json` in jedem Export (Blöcke und Anhang-Zuordnung,
 ohne Zeitstempel); passwortgeschützte Exporte enthalten sie nicht und lassen sich nicht importieren.
@@ -258,8 +276,18 @@ Liloport nicht anhalten. Inhaltsströme werden in linearer Zeit zerlegt (`tests/
 ## Dashboard
 
 Drei Reiter: **Portfolio** (Suche und Verzeichnisbaum), **Kompetenzen** (Rahmen anlegen, importieren,
-Abbildung) und **Verwaltung** (Backup, Papierkorb, nicht verwendete Dateien, Profil). So bleibt die
+Abbildung) und **Verwaltung** (Backup, Papierkorb, nicht verwendete Dateien, Menü-Anzeige der Seiten,
+Export des ganzen Portfolios, Profil). So bleibt die
 Verwaltung auch bei sehr vielen Verzeichnissen erreichbar; ein veraltetes Backup zeigt ⚠ am Reiter.
+Unter **Menü-Anzeige der Seiten** zeigt eine Tabelle alle Seiten mit ihrer Menü-Art (Menübar ganz,
+Seitenmenü, kein Menü); Umschalten dort speichert sofort und gilt beim nächsten Aufruf der Seite.
+
+**Ordner-Abgleich:** Wer Ordner oder Seiten direkt im Dateimanager löscht, verschiebt oder hinzufügt,
+sieht im Dashboard ein Band «Der Inhalte-Ordner wurde ausserhalb von Liloport geändert». «Ansehen und
+abgleichen» zeigt die Unterschiede und übernimmt sie: Einträge zu gelöschten Ordnern und Seiten werden
+entfernt, neue Seiten und Ordner (samt Unterordnern) aufgenommen. Anhänge, die danach keine Seite mehr
+verwendet, erscheinen unter «Nicht verwendete Dateien». Besser ist trotzdem das Verschieben und Löschen
+in Liloport selbst – dabei ziehen Anhänge, Verlauf, Kommentare und interne Links mit.
 Verzeichnisse und Seiten sind standardmässig **A–Z** sortiert (mit Umlauten und Zahlen in natürlicher
 Reihenfolge: «Woche 2» vor «Woche 10»), umschaltbar auf «Erstellt». Jedes Verzeichnis lässt sich auf- und
 zuklappen und zeigt eingeklappt, wie viele Seiten und Unterverzeichnisse es enthält; dazu «Alle
@@ -352,7 +380,9 @@ kommen mit «Herunterladen» und dem Import zurück nach Liloport, wo sie unter 
 Unter **Profil für Exporte** im Dashboard stehen Anzeigename und ID-Nummer (z. B. Matrikelnummer). Beide
 werden im Export-Dialog vorbelegt; ob sie auf den exportierten Seiten erscheinen, entscheidet ein Schalter
 je Export. **Verschieben** bringt eine Seite samt Datei, Anhängen, Verlauf, Kommentaren und internen Links
-in ein anderes Verzeichnis (ersetzt die früheren Weiterleitungen).
+in ein anderes Verzeichnis (ersetzt die früheren Weiterleitungen). Auch **Verzeichnisse** lassen sich
+verschieben – samt Unterverzeichnissen und allen Seiten – in ein anderes Verzeichnis oder auf die
+oberste Ebene; Anhänge, Verlauf, Kommentare und interne Links ziehen mit.
 
 ## Sicherheit und Meldungen
 

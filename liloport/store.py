@@ -173,6 +173,45 @@ class Store:
         self.site_speichern(site)
         return v
 
+    def verzeichnis_verschieben(self, vid: str, neue_eltern=None) -> dict:
+        """Verschiebt ein Verzeichnis samt Unterverzeichnissen und Seiten in ein anderes Verzeichnis
+        oder auf die oberste Ebene (neue_eltern=None). Merkt die Umbenennung in letzte_umbenennung,
+        damit der Server Links, Anhänge, Verlauf und Kommentare nachziehen kann."""
+        site = self.site_laden()
+        v = self.verzeichnis(site, vid)
+        neue_eltern = neue_eltern or None
+        if neue_eltern == vid:
+            raise StoreFehler("Ein Verzeichnis kann nicht in sich selbst verschoben werden.")
+        eltern_ordner = ""
+        if neue_eltern:
+            ziel = self.verzeichnis(site, neue_eltern)
+            lauf = ziel
+            while lauf is not None:   # Ziel darf kein Unterverzeichnis des verschobenen Verzeichnisses sein
+                if lauf["id"] == vid:
+                    raise StoreFehler("Ein Verzeichnis kann nicht in eines seiner Unterverzeichnisse verschoben werden.")
+                lauf = next((x for x in site["verzeichnisse"] if x["id"] == lauf.get("eltern")), None)
+            eltern_ordner = ziel["ordner"]
+        if (v.get("eltern") or None) == neue_eltern:
+            raise StoreFehler("Das Verzeichnis liegt bereits dort.")
+        alter_ordner = v["ordner"]
+        geschwister = {Path(x["ordner"]).name for x in self.kinder(site, neue_eltern) if x["id"] != vid}
+        slug = slugs.eindeutig(Path(alter_ordner).name, geschwister)
+        if not neue_eltern and slug.startswith("_"):
+            raise StoreFehler("Ordnernamen dürfen nicht mit _ beginnen.")
+        neuer_ordner = f"{eltern_ordner}/{slug}" if eltern_ordner else slug
+        if self.sicherer_pfad(neuer_ordner).exists():
+            raise StoreFehler(f"Der Ordner «{neuer_ordner}» existiert bereits.")
+        shutil.move(self.sicherer_pfad(alter_ordner), self.sicherer_pfad(neuer_ordner))
+        for x in site["verzeichnisse"]:
+            if x["ordner"] == alter_ordner or x["ordner"].startswith(alter_ordner + "/"):
+                x["ordner"] = neuer_ordner + x["ordner"][len(alter_ordner):]
+            x["seiten"] = [self._redirect_umbenennen(s, alter_ordner, neuer_ordner) for s in x["seiten"]]
+        self.letzte_umbenennung = (alter_ordner, neuer_ordner)
+        v["eltern"] = neue_eltern
+        v["reihenfolge"] = len(geschwister)
+        self.site_speichern(site)
+        return v
+
     @staticmethod
     def _redirect_umbenennen(eintrag: str, alt: str, neu: str) -> str:
         """Passt einen Redirect-Eintrag ->alt/… an einen umbenannten Ordner an."""
@@ -227,14 +266,26 @@ class Store:
             datei.unlink()
 
     def verzeichnis_loeschen(self, vid: str):
-        """Löscht ein leeres Verzeichnis (keine Seiten, keine Unterverzeichnisse)."""
+        """Löscht ein leeres Verzeichnis (keine Seiten, keine Unterverzeichnisse).
+
+        Einträge zu Dateien, die es nicht mehr gibt – etwa weil der Ordner oder einzelne Seiten von
+        Hand im Dateimanager gelöscht wurden –, zählen nicht als Inhalt und werden mit ausgetragen."""
         site = self.site_laden()
         v = self.verzeichnis(site, vid)
+        ordner = self.sicherer_pfad(v["ordner"])
+
+        def existiert(eintrag: str) -> bool:
+            if eintrag.startswith("->"):
+                return self.sicherer_pfad(eintrag[2:] + ".json").is_file()
+            return (ordner / (eintrag + ".json")).is_file()
+        uebrig = [s for s in v["seiten"] if existiert(s)]
+        if uebrig != v["seiten"]:
+            v["seiten"] = uebrig
+            self.site_speichern(site)
         if v["seiten"]:
             raise StoreFehler("Das Verzeichnis enthält noch Seiten.")
         if self.kinder(site, vid):
             raise StoreFehler("Das Verzeichnis enthält noch Unterverzeichnisse.")
-        ordner = self.sicherer_pfad(v["ordner"])
         if ordner.exists():
             shutil.rmtree(ordner)
         site["verzeichnisse"] = [x for x in site["verzeichnisse"] if x["id"] != vid]

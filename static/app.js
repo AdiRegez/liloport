@@ -114,7 +114,8 @@
         el('button', { 'class': 'klein', text: 'Seite', title: 'Neue Seite in diesem Verzeichnis', onclick: function () { dialogSeite(v.id); } }),
         el('button', { 'class': 'klein', text: 'Unterverzeichnis', onclick: function () { dialogVerzeichnis(v.id); } }),
         el('button', { 'class': 'klein', text: 'Bearbeiten', onclick: function () { dialogVerzeichnisAendern(v); } }),
-        el('button', { 'class': 'klein', text: 'Exportieren', title: 'Dieses Verzeichnis mit allen Unterverzeichnissen als ZIP für einen Webserver', onclick: function () { L.dialogExport({ verzeichnis: v.id, titel: v.name }); } }),
+        el('button', { 'class': 'klein', text: 'Verschieben', title: 'Dieses Verzeichnis samt Inhalt in ein anderes Verzeichnis oder auf die oberste Ebene verschieben', onclick: function () { dialogVerzeichnisVerschieben(v); } }),
+        el('button', { 'class': 'klein', text: 'Exportieren', title: 'Dieses Verzeichnis mit allen Unterverzeichnissen als ZIP weitergeben oder veröffentlichen', onclick: function () { L.dialogExport({ verzeichnis: v.id, titel: v.name }); } }),
         el('button', { 'class': 'klein gefahr', text: 'Löschen', onclick: function () { verzeichnisLoeschen(v); } })
       ]));
     }
@@ -169,6 +170,53 @@
     wartung();
     beispielKarte();
     geraetWarnung();
+    abgleichPruefen();
+  }
+
+  // ---------- Ordner-Abgleich: von Hand gelöschte oder hinzugefügte Ordner und Seiten ----------
+
+  function abgleichPruefen() {
+    /* Zeigt ein Band, wenn der Inhalte-Ordner ausserhalb von Liloport verändert wurde
+       (z. B. Ordner im Dateimanager gelöscht oder verschoben). */
+    var alt = document.getElementById('abgleich-hinweis'); if (alt) alt.remove();
+    if (!edit) return;
+    L.api('GET', '/api/abgleich').then(function (b) {
+      var nochmal = document.getElementById('abgleich-hinweis'); if (nochmal) nochmal.remove();
+      if (!b.anzahl) return;
+      var teile = [];
+      if (b.verzeichnisseFehlen.length) teile.push(b.verzeichnisseFehlen.length + (b.verzeichnisseFehlen.length === 1 ? ' Verzeichnis fehlt' : ' Verzeichnisse fehlen'));
+      if (b.seitenFehlen.length) teile.push(b.seitenFehlen.length + (b.seitenFehlen.length === 1 ? ' Seite fehlt' : ' Seiten fehlen'));
+      if (b.seitenNeu.length) teile.push(b.seitenNeu.length + (b.seitenNeu.length === 1 ? ' neue Seite' : ' neue Seiten'));
+      if (b.ordnerNeu.length) teile.push(b.ordnerNeu.length + (b.ordnerNeu.length === 1 ? ' neuer Ordner' : ' neue Ordner'));
+      var karte = el('div', { id: 'abgleich-hinweis', 'class': 'geraet-warnung abgleich-hinweis' }, [
+        el('span', { text: '🔄 Der Inhalte-Ordner wurde ausserhalb von Liloport geändert: ' + teile.join(' · ') + '.' }),
+        el('button', { 'class': 'klein', text: 'Ansehen und abgleichen …', onclick: function () { dialogAbgleich(b); } })
+      ]);
+      var ziel = document.querySelector('.dashboard-inhalt');
+      ziel.insertBefore(karte, ziel.firstChild);
+    }).catch(function () {});
+  }
+
+  function dialogAbgleich(b) {
+    function abschnittListe(titel, eintraege, zeile) {
+      if (!eintraege.length) return null;
+      return el('div', { 'class': 'feld' }, [el('label', { text: titel }),
+        el('ul', { 'class': 'loesch-liste' }, eintraege.map(function (e) { return el('li', { text: zeile(e) }); }))]);
+    }
+    dialog('Inhalte-Ordner abgleichen', [
+      el('p', { 'class': 'hinweis', text: 'Diese Unterschiede zwischen dem Ordner auf der Festplatte und Liloport wurden gefunden. «Abgleichen» übernimmt sie: Einträge zu gelöschten Ordnern und Seiten werden entfernt, neue Dateien und Ordner aufgenommen. Anhänge, die danach keine Seite mehr verwendet, erscheinen unter «Verwaltung › Nicht verwendete Dateien».' }),
+      abschnittListe('Verzeichnisse, deren Ordner fehlt – werden aus Liloport entfernt', b.verzeichnisseFehlen,
+        function (e) { return e.name + ' (' + e.ordner + '/)' + (e.seiten ? ' · ' + e.seiten + (e.seiten === 1 ? ' Seite' : ' Seiten') : ''); }),
+      abschnittListe('Seiten, deren Datei fehlt – werden ausgetragen', b.seitenFehlen,
+        function (e) { return e.verzeichnis + ' › ' + e.slug; }),
+      abschnittListe('Neue Seiten – werden aufgenommen', b.seitenNeu,
+        function (e) { return e.verzeichnis + ' › ' + e.titel; }),
+      abschnittListe('Neue Ordner – werden als Verzeichnisse aufgenommen', b.ordnerNeu,
+        function (e) { return e.ordner + '/' + (e.seiten ? ' · ' + e.seiten + (e.seiten === 1 ? ' Seite' : ' Seiten') : ' (leer)'); }),
+      el('p', { 'class': 'klein-text', text: 'Tipp: Verzeichnisse und Seiten besser direkt in Liloport verschieben oder löschen – dann ziehen Anhänge, Verlauf, Kommentare und interne Links mit. Links auf von Hand verschobene Seiten zeigen sonst ins Leere.' })
+    ], 'Abgleichen', function () {
+      return L.api('POST', '/api/abgleich', {}).then(neuLaden);
+    });
   }
 
   function beispielKarte() {
@@ -210,7 +258,7 @@
     z.appendChild(el('code', { text: pfad }));
     if (edit) {
       z.appendChild(el('button', { 'class': 'klein', text: '📂 Ordner öffnen', onclick: function () { L.api('POST', '/api/oeffnen', { pfad: '' }).catch(fehlerZeigen); } }));
-      if (daten.verzeichnisse.length) z.appendChild(el('button', { 'class': 'klein', text: '📦 Ganzes Portfolio exportieren', onclick: function () { L.dialogExport({ verzeichnis: '', titel: daten.titel || 'Portfolio' }); } }));
+      // «Ganzes Portfolio exportieren» steht im Reiter «Verwaltung» – hier oben wird es selten gebraucht
     } else {
       z.appendChild(el('a', { 'class': 'knopf klein', href: 'file://' + (pfad.charAt(0) === '/' ? '' : '/') + pfad.replace(/\\/g, '/') + '/', text: '📂 Ordner öffnen' }));
     }
@@ -232,13 +280,14 @@
   }
 
   function dialogAuswahl() {
-    if (!daten.verzeichnisse.length) { dialogVerzeichnis(null); return; }
+    var ohneVerzeichnis = !daten.verzeichnisse.length;
     var d = dialog('Was soll angelegt werden?', [
       el('div', { 'class': 'feld-zeile' }, [
-        el('button', { type: 'button', 'class': 'primaer', text: '📄 Neue Seite', onclick: function () { d.close(); dialogSeite(null); } }),
-        el('button', { type: 'button', text: '📁 Neues Verzeichnis', onclick: function () { d.close(); dialogVerzeichnis(null); } }),
-        el('button', { type: 'button', text: '📥 Seite aus ZIP importieren', onclick: function () { d.close(); dialogImportZip(); } })
-      ])
+        ohneVerzeichnis ? null : el('button', { type: 'button', 'class': 'primaer', text: '📄 Neue Seite', onclick: function () { d.close(); dialogSeite(null); } }),
+        el('button', { type: 'button', 'class': ohneVerzeichnis ? 'primaer' : '', text: '📁 Neues Verzeichnis', onclick: function () { d.close(); dialogVerzeichnis(null); } }),
+        el('button', { type: 'button', text: '📥 Aus ZIP importieren', title: 'Export-ZIP einer Seite, eines Verzeichnisses oder eines ganzen Portfolios einlesen', onclick: function () { d.close(); dialogImportZip(); } })
+      ]),
+      ohneVerzeichnis ? el('p', { 'class': 'hinweis', text: 'Seiten liegen immer in einem Verzeichnis – darum zuerst ein Verzeichnis anlegen (oder eine ZIP importieren).' }) : null
     ], 'Schliessen', function () {});
     d.querySelector('button[type=submit]').style.display = 'none';
   }
@@ -249,9 +298,24 @@
     var datei = el('input', { type: 'file', accept: '.zip,application/zip' });
     var info = el('div', { 'class': 'import-info' });
     var titel = el('input', { type: 'text', maxlength: '120' });
-    var verz = verzeichnisAuswahl((kinderVon(null)[0] || {}).id); verz.firstChild.remove();
-    var schritt2 = el('div', null, [feld('Titel', titel), feld('Verzeichnis', verz)]); schritt2.hidden = true;
-    var token = null;
+    var titelFeld = feld('Titel', titel);
+    var zielHinweis = el('span');
+    var verz = verzeichnisAuswahl((kinderVon(null)[0] || {}).id);
+    verz.firstChild.textContent = '– neues Verzeichnis auf oberster Ebene –';
+    if (!daten.verzeichnisse.length) verz.value = '';
+    var schritt2 = el('div', null, [titelFeld, feld('Ziel', verz, zielHinweis)]); schritt2.hidden = true;
+    var token = null, mehrseitig = false;
+    function anpassen() {
+      var oberste = !verz.value;
+      titelFeld.hidden = mehrseitig && !oberste;
+      titelFeld.querySelector('label').textContent = oberste
+        ? (mehrseitig ? 'Name des neuen Verzeichnisses' : 'Titel (Seite und neues Verzeichnis)')
+        : 'Titel';
+      zielHinweis.textContent = oberste
+        ? 'Es wird ein neues Verzeichnis auf oberster Ebene angelegt' + (mehrseitig ? '; die Unterverzeichnisse des Exports werden darin nachgebildet.' : ', und die Seite kommt hinein.')
+        : (mehrseitig ? 'Die Seiten werden in diesem Verzeichnis angelegt; Unterverzeichnisse des Exports werden nachgebildet.' : '');
+    }
+    verz.addEventListener('change', anpassen);
     datei.addEventListener('change', function () {
       var f = datei.files[0]; if (!f) return;
       info.textContent = 'ZIP wird geprüft …'; schritt2.hidden = true; token = null;
@@ -260,19 +324,22 @@
         .then(function (j) {
           if (j.fehler) throw new Error(j.fehler);
           token = j.token; titel.value = j.titel;
+          mehrseitig = j.seiten > 1;
+          if (mehrseitig) verz.value = '';   // Verzeichnis- und Portfolio-Exporte kommen am besten als eigenes Verzeichnis
           info.innerHTML = '';
           info.appendChild(el('p', null, [el('strong', { text: j.titel }), el('span', { text: ' – ' + (j.seiten > 1 ? j.seiten + ' Seiten, ' : '') + j.bloecke + ' Blöcke, ' + j.anhaenge + ' Anhänge, ' + j.kommentare + ' Kommentare' + (j.css ? ', eigenes CSS' : '') })]));
-          if (j.seiten > 1) info.appendChild(el('p', { 'class': 'klein-text', text: 'Die Seiten werden im gewählten Verzeichnis angelegt' + (j.verzeichnisse.length > 1 ? ', Unterverzeichnisse werden nachgebildet: ' + j.verzeichnisse.join(' · ') : '') + '. Interne Links zwischen den Seiten bleiben erhalten.' }));
+          if (mehrseitig && j.verzeichnisse.length > 1) info.appendChild(el('p', { 'class': 'klein-text', text: 'Mit den Unterverzeichnissen: ' + j.verzeichnisse.join(' · ') + '. Interne Links zwischen den Seiten bleiben erhalten.' }));
           if (j.abgabe) info.appendChild(el('p', { 'class': j.abgabe.gueltig ? 'hinweis' : 'fehlermeldung', text: (j.abgabe.gueltig ? '✓ Abgabestempel vom ' : '✗ Abgabestempel vom ') + j.abgabe.zeit.replace('T', ' ') + (j.abgabe.gueltig ? ': Inhalt seit dem Export unverändert.' : ': Der Inhalt wurde seit dem Export verändert.') + ' Prüfsumme ' + j.abgabe.pruefsumme.slice(0, 16) + '…' }));
-          titel.parentNode.hidden = j.seiten > 1;
           if (j.html) info.appendChild(el('p', { 'class': 'hinweis', text: 'Die Seite enthält ' + j.html + ' HTML-Block/Blöcke. Zur Sicherheit werden Skripte und Event-Handler beim Import entfernt.' }));
           if (j.fehlend.length) info.appendChild(el('p', { 'class': 'hinweis', text: 'In der ZIP fehlen: ' + j.fehlend.join(', ') + ' – diese Blöcke bleiben leer.' }));
+          anpassen();
           schritt2.hidden = false;
         })
         .catch(function (e) { info.textContent = e.message; });
     });
-    dialog('Seite(n) aus ZIP importieren', [
-      el('p', { 'class': 'hinweis', text: 'Eine ZIP, die über «Herunterladen» von einer exportierten Seite stammt (oder die Export-ZIP selbst, auch von einem Verzeichnis oder ganzen Portfolio). Die Seiten werden neu angelegt, Anhänge übernommen, Kommentare erscheinen unter der Seite. Vorlagen von Dozierenden oder der Hochschule lassen sich genauso importieren.' }),
+    anpassen();
+    dialog('Aus ZIP importieren', [
+      el('p', { 'class': 'hinweis', text: 'Eine Export-ZIP aus Liloport: eine einzelne Seite, ein Verzeichnis oder ein ganzes Portfolio – auch eine ZIP, die über «Herunterladen» von einer exportierten Seite stammt. Seiten werden neu angelegt, Anhänge übernommen, Kommentare erscheinen unter der Seite; bei Verzeichnis- und Portfolio-Exporten werden die Unterverzeichnisse nachgebildet. Vorlagen von Dozierenden oder der Hochschule lassen sich genauso importieren.' }),
       feld('ZIP-Datei', datei), info, schritt2
     ], 'Importieren', function () {
       if (!token) throw new Error('Bitte zuerst eine gültige ZIP wählen.');
@@ -352,6 +419,26 @@
         (!v.geloescht.length && !v.bleibt.length && !v.redirects.length) ? el('p', { text: 'Die Seite hat keine Anhänge und keine Weiterleitungen.' }) : null
       ], 'Löschen', function () { return L.api('DELETE', '/api/seiten/' + s.pfad).then(neuLaden); });
     }).catch(fehlerZeigen);
+  }
+
+  function dialogVerzeichnisVerschieben(v) {
+    /* Verzeichnis samt Unterverzeichnissen und Seiten in ein anderes Verzeichnis oder auf die oberste Ebene. */
+    var ziel = el('select');
+    ziel.appendChild(el('option', { value: '', text: '– oberste Ebene –' }));
+    (function rek(elternId, tiefe) {
+      kinderVon(elternId).forEach(function (k) {
+        if (k.id === v.id) return;   // sich selbst (und damit den eigenen Teilbaum) nicht anbieten
+        ziel.appendChild(el('option', { value: k.id, text: '  '.repeat(tiefe) + k.name }));
+        rek(k.id, tiefe + 1);
+      });
+    })(null, 0);
+    ziel.value = v.eltern || '';
+    dialog('Verzeichnis «' + v.name + '» verschieben', [
+      el('p', { 'class': 'hinweis', text: 'Das Verzeichnis wandert mit allen Unterverzeichnissen, Seiten, Anhängen, Verläufen und Kommentaren an den neuen Ort. Interne Links werden angepasst; alte Lesezeichen auf die Dateien gelten danach nicht mehr.' }),
+      feld('Neuer Ort', ziel)
+    ], 'Verschieben', function () {
+      return L.api('POST', '/api/verzeichnisse/' + v.id + '/verschieben', { eltern: ziel.value || null }).then(neuLaden);
+    });
   }
 
   function dialogVerschieben(s) {
@@ -464,6 +551,20 @@
       });
       sek.appendChild(abschnitt('📎', 'Nicht verwendete Dateien', ids.length ? ids.length + ' Dateien' : 'keine', false, aInhalt));
 
+      // Menü-Anzeige aller Seiten: pro Seite zwischen Menübar, Seitenmenü und keinem Menü umschalten
+      var menueU = menueUebersicht();
+      sek.appendChild(abschnitt('☰', 'Menü-Anzeige der Seiten', menueU.zusammenfassung, false, menueU.el));
+
+      // Ganzes Portfolio exportieren: bewusst hier statt prominent im Dashboard-Kopf (selten gebraucht)
+      if (daten.verzeichnisse.length) {
+        var exInhalt = el('div', { 'class': 'portfolio-export' }, [
+          el('p', { 'class': 'klein-text', text: 'Erzeugt eine ZIP des ganzen Portfolios: eine kleine Website mit Inhaltsverzeichnis als Startseite, zum Weitergeben oder für einen Webserver. Einzelne Seiten und Verzeichnisse exportierst du direkt im Reiter «Portfolio».' }),
+          el('p', { 'class': 'klein-text', text: '⏳ Je nach Grösse des Portfolios (viele Bilder, Videos oder PDFs) kann das Erstellen der ZIP einige Minuten dauern. Der Download beginnt erst, wenn die ZIP fertig ist – das Fenster so lange offen lassen.' }),
+          el('button', { text: '📦 Ganzes Portfolio exportieren', onclick: function () { L.dialogExport({ verzeichnis: '', titel: daten.titel || 'Portfolio' }); } })
+        ]);
+        sek.appendChild(abschnitt('📦', 'Ganzes Portfolio exportieren', '', false, exInhalt));
+      }
+
       // Kompetenzen: Rahmen anlegen/importieren, bearbeiten, Abbildung ansehen
       var rahmen = (r[4] || {}).rahmen || [];
       var kInhalt = el('div', { 'class': 'kompetenz-zeile' });
@@ -510,6 +611,63 @@
         document.querySelector('.dashboard-inhalt').appendChild(sek);
       }
     }).catch(function () {});
+  }
+
+  // ---------- Verwaltung: Menü-Anzeige aller Seiten ----------
+
+  var MENUE_ARTEN = [['voll', 'Menübar ganz'], ['seitenmenue', 'Seitenmenü'], ['keine', 'Kein Menü']];
+
+  function menueUebersicht() {
+    /* Tabelle aller Seiten mit ihrer Menü-Art; Umschalten speichert sofort und gilt beim nächsten Seitenaufruf. */
+    var inhalt = el('div', { 'class': 'menue-uebersicht' });
+    var zaehler = { voll: 0, seitenmenue: 0, keine: 0 };
+    var zeilen = 0;
+    var tabelle = el('table', { 'class': 'menue-tabelle' });
+    tabelle.appendChild(el('thead', null, [el('tr', null, [el('th', { text: 'Seite' })].concat(MENUE_ARTEN.map(function (m) {
+      return el('th', { 'class': 'menue-zelle', text: m[1] });
+    })))]));
+    var tbody = el('tbody');
+    function pfadName(v) {
+      var teile = [], x = v;
+      while (x) { teile.unshift(x.name); x = daten.verzeichnisse.filter(function (y) { return y.id === x.eltern; })[0]; }
+      return teile.join(' › ');
+    }
+    (function rek(elternId) {
+      kinderVon(elternId).forEach(function (v) {
+        var seiten = seitenVon(v).filter(function (s) { return !s.redirect; });
+        if (seiten.length) tbody.appendChild(el('tr', { 'class': 'menue-verz' }, [el('td', { colspan: String(MENUE_ARTEN.length + 1), text: '📁 ' + pfadName(v) })]));
+        seiten.forEach(function (s) {
+          zeilen++;
+          zaehler[s.menue || 'voll'] = (zaehler[s.menue || 'voll'] || 0) + 1;
+          var status = el('span', { 'class': 'menue-status klein-text' });
+          var tr = el('tr', null, [el('td', { 'class': 'menue-titel' }, [el('a', { href: s.pfad + '.html', text: s.titel }), status])]);
+          MENUE_ARTEN.forEach(function (m) {
+            var radio = el('input', { type: 'radio', name: 'menue-' + s.pfad, value: m[0], title: m[1], 'aria-label': m[1] + ' für «' + s.titel + '»' });
+            if ((s.menue || 'voll') === m[0]) radio.checked = true;
+            radio.addEventListener('change', function () {
+              if (!radio.checked) return;
+              status.textContent = 'speichert …';
+              L.api('PUT', '/api/seiten/' + s.pfad, { menue: m[0] }).then(function () {
+                s.menue = m[0];
+                status.textContent = '✓ gespeichert';
+                setTimeout(function () { if (status.textContent === '✓ gespeichert') status.textContent = ''; }, 2500);
+              }).catch(function (e) { status.textContent = ''; fehlerZeigen(e); });
+            });
+            tr.appendChild(el('td', { 'class': 'menue-zelle' }, [radio]));
+          });
+          tbody.appendChild(tr);
+        });
+        rek(v.id);
+      });
+    })(null);
+    tabelle.appendChild(tbody);
+    if (!zeilen) {
+      inhalt.appendChild(el('p', { 'class': 'hinweis', text: 'Noch keine Seiten.' }));
+    } else {
+      inhalt.appendChild(el('p', { 'class': 'klein-text', text: 'Bestimmt pro Seite, wie das Menü erscheint: Menübar ganz (Verzeichnisleiste oben), nur als Seitenmenü (Seitenleiste links) oder kein Menü. Eine Änderung wird sofort gespeichert und gilt beim nächsten Aufruf der Seite.' }));
+      inhalt.appendChild(tabelle);
+    }
+    return { el: inhalt, zusammenfassung: zeilen ? (zaehler.voll + '× ganz · ' + zaehler.seitenmenue + '× Seitenmenü · ' + zaehler.keine + '× ohne') : 'keine Seiten' };
   }
 
   function dialogRahmenNeu() {
