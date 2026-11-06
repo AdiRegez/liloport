@@ -714,5 +714,13 @@
   }
 
   window.LiloportExport = { init: init };
+  // Drucken (Strg/Cmd+P): Eingeklapptes ausgeklappt drucken, alle Bilder laden; danach wieder zuklappen
+  var druckGeoeffnet = [];
+  window.addEventListener('beforeprint', function () {
+    [].slice.call(document.querySelectorAll('details:not([open])')).forEach(function (d) { d.open = true; druckGeoeffnet.push(d); });
+    [].slice.call(document.querySelectorAll('img[loading="lazy"]')).forEach(function (i) { i.loading = 'eager'; });
+  });
+  window.addEventListener('afterprint', function () { druckGeoeffnet.forEach(function (d) { d.open = false; }); druckGeoeffnet = []; });
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
