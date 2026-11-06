@@ -186,6 +186,8 @@ class History:
         seite = e["seite"]
         pfad, neu = self.store.seite_anlegen(seite.get("titel") or "Seite", vid, seite.get("menue", "voll"), seite.get("bloecke", []))
         neu["css"] = seite.get("css", "")
+        if seite.get("gliederung"):
+            neu["gliederung"] = seite["gliederung"]
         neu["erstellt"] = seite.get("erstellt", neu["erstellt"])
         self.store.seite_speichern(pfad, neu)
         if assets is not None and e.get("anhaenge"):

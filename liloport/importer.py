@@ -204,7 +204,8 @@ class Importer:
                 tags = tags_pruefen(s.get("tags") or [])
             except StoreFehler:
                 tags = []
-            seite = self.store.seite_aktualisieren(pfad, bloecke=bloecke, css=css, datum=datum, tags=tags)
+            seite = self.store.seite_aktualisieren(pfad, bloecke=bloecke, css=css, datum=datum, tags=tags,
+                                                   gliederung=str(s.get("gliederung") or ""))
             self.assets.referenzen_setzen(pfad, seite)
             kommentare = self._kommentare_lesen(z, wurzel, s, i == 0, mehrere)
             if kommentare and self.kommentare:

@@ -256,7 +256,7 @@ class Exporter:
             vorbereitet.append({"pfad": pfad, "ort": ort, "titel": seite["titel"], "datum": seite.get("datum", ""),
                                 "tags": seite.get("tags") or [], "menue": seite.get("menue", "voll"),
                                 "css": css, "bloecke": bloecke, "slug": seite["slug"], "geaendert": seite.get("geaendert", ""),
-                                "verweise": seite.get("verweise") is not False})
+                                "verweise": seite.get("verweise") is not False, "gliederung": seite.get("gliederung", "")})
 
         # Abgabestempel über Inhalt und Dateien (ohne Kommentare)
         stempel = None
@@ -283,7 +283,7 @@ class Exporter:
             inhalt += f"<h1 class=\"seitentitel\">{html.escape(v['titel'])}</h1>\n"
             inhalt += _stempel_html(stempel)
             inhalt += _metazeile(v, site, optionen)
-            inhalt += links.fussnoten("\n".join(br.block(b) for b in v["bloecke"]))
+            inhalt += links.fussnoten(br.bloecke(v["bloecke"], v.get("gliederung", "")))
             if portfolio and v.get("verweise", True):
                 inhalt += rueckverweise_html(verweise.get(v["pfad"], []), ziel_fuer)
             bisherige = []
@@ -302,7 +302,7 @@ class Exporter:
         quelle = None
         if not passwort:
             felder = lambda v: {"titel": v["titel"], "datum": v["datum"], "tags": v["tags"], "menue": v["menue"],  # noqa: E731
-                                "css": v["css"], "bloecke": v["bloecke"]}
+                                "css": v["css"], "bloecke": v["bloecke"], "gliederung": v.get("gliederung", "")}
             anhaenge = {aid: {"datei": e["datei"], "name": e["name"], "typ": e["typ"]} for aid, e in export_registry.items()}
             if portfolio:
                 quelle = {"liloport": 2, "titel": titel, "anhaenge": anhaenge,

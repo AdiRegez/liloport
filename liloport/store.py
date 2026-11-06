@@ -332,7 +332,7 @@ class Store:
         return pfad, seite
 
     def seite_aktualisieren(self, pfad: str, titel=None, menue=None, bloecke=None, css=None, kommentare=None,
-                            datum=None, tags=None, verweise=None) -> dict:
+                            datum=None, tags=None, verweise=None, gliederung=None) -> dict:
         """Ändert Titel, Menü-Option, Blöcke, Seiten-CSS, Kommentar-Flag, Datum, Tags oder «Verlinkt von» einer Seite."""
         seite = self.seite_laden(pfad)
         if verweise is not None:
@@ -340,6 +340,12 @@ class Store:
                 seite.pop("verweise", None)      # Standard: «Verlinkt von» zeigen
             else:
                 seite["verweise"] = False
+        if gliederung is not None:
+            # Profi: Hierarchie der Überschriften sichtbar machen (linien | flaechen | nummern); leer = aus
+            if gliederung in ("linien", "flaechen", "nummern"):
+                seite["gliederung"] = gliederung
+            else:
+                seite.pop("gliederung", None)
         if datum is not None:
             seite["datum"] = datum_pruefen(datum)
         if tags is not None:

@@ -17,6 +17,9 @@ STATIC = PROGRAMM / "static"
 BREITEN = ("voll", "halb", "klein")
 AUSRICHTUNGEN = ("links", "mitte", "rechts")
 TRENNER_ARTEN = {"gestrichelt": "dashed", "gepunktet": "dotted", "doppelt": "double"}
+GLIEDERUNGEN = ("linien", "flaechen", "nummern")   # Profi: Hierarchie der Überschriften sichtbar machen
+_TAG = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)\b[^>]*?(/?)>")
+_LEERE_TAGS = {"br", "hr", "img", "input", "wbr"}
 _FARBE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -124,12 +127,23 @@ class BlockRenderer:
                     f'<summary>{titel}</summary><div class="klapp-inhalt">{inner}</div></details>')
         return inner
 
+    def bloecke(self, liste: list, gliederung: str = "") -> str:
+        """Rendert die Blöcke einer Seite, verschachtelt nach Überschriften (siehe gliedern)."""
+        liste = [b for b in (liste or []) if isinstance(b, dict)]
+        # Standard (auch Amateur): Kapitel links bündig, Überschriften in der Farbe ihrer Ebene
+        return gliedern(liste, self, gliederung if gliederung in GLIEDERUNGEN else "standard")
+
+    def _text_inhalt(self, b: dict) -> str:
+        inhalt = links.aufloesen(sanitize.filtern(b.get("html", ""), "profi"), self.ziel_fuer)
+        # Breite Tabellen scrollen in ihrem Rahmen, statt über das Seitenlayout hinauszuragen
+        return inhalt.replace("<table", '<div class="tabelle-rahmen"><table').replace("</table>", "</table></div>")
+
     def _block(self, b: dict) -> str:
         """Rendert einen Block; unbekannte Typen ergeben einen Hinweis."""
         bid = html.escape(str(b.get("id", "")), quote=True)
         typ = b.get("typ", "text")
         if typ == "text":
-            inhalt = links.aufloesen(sanitize.filtern(b.get("html", ""), "profi"), self.ziel_fuer)
+            inhalt = self._text_inhalt(b)
             return f'<section class="block block-text" data-id="{bid}" data-typ="text">{inhalt}</section>'
         if typ == "trenner":
             return f'<hr class="block block-trenner" data-id="{bid}" data-typ="trenner"{trenner_stil(b)}>'
@@ -165,14 +179,16 @@ class BlockRenderer:
             if not e:
                 return self._fehlt(bid, "video", "Video noch nicht gewählt.")
             return (f'<figure class="block block-video" data-id="{bid}" data-typ="video">'
-                    f'<video controls preload="metadata" src="{self.rel}{html.escape(e["datei"], quote=True)}"></video></figure>')
+                    f'<video controls preload="metadata" src="{self.rel}{html.escape(e["datei"], quote=True)}"></video>'
+                    f'{druck_hinweis("Video", "In der digitalen Version ist hier ein Video eingebunden", e["name"])}</figure>')
         if typ == "audio":
             e = self._asset(b)
             if not e:
                 return self._fehlt(bid, "audio", "Audio-Datei noch nicht gewählt.")
             return (f'<figure class="block block-audio" data-id="{bid}" data-typ="audio">'
                     f'<audio controls preload="metadata" src="{self.rel}{html.escape(e["datei"], quote=True)}"></audio>'
-                    f'<figcaption>{html.escape(e["name"])}</figcaption></figure>')
+                    f'<figcaption>{html.escape(e["name"])}</figcaption>'
+                    f'{druck_hinweis("Audio", "In der digitalen Version kann hier eine Audioaufnahme abgespielt werden", e["name"])}</figure>')
         if typ == "pdf":
             e = self._asset(b)
             if not e:
@@ -189,7 +205,8 @@ class BlockRenderer:
                     else f'<a href="{self.rel}{ordner}/" class="ordner-link" data-ordner="{ordner}">Im Ordner öffnen</a>')
             return (f'<figure class="block block-pdf" data-id="{bid}" data-typ="pdf">'
                     f'<iframe src="{src}" style="height:{hoehe}px" title="{html.escape(e["name"])}"></iframe>'
-                    f'<figcaption>{html.escape(e["name"])} · {link}</figcaption></figure>')
+                    f'<figcaption>{html.escape(e["name"])} · {link}</figcaption>'
+                    f'{druck_hinweis("PDF", "In der digitalen Version ist hier ein PDF-Dokument eingebettet, das sich durchblättern lässt" + (f" (ab Seite {startseite})" if startseite > 1 else ""), e["name"])}</figure>')
         if typ == "datei":
             e = self._asset(b)
             if not e:
@@ -206,27 +223,102 @@ class BlockRenderer:
             return (f'<div class="block block-datei" data-id="{bid}" data-typ="datei">'
                     f'<a href="{href}" class="{klasse}"{extra}>'
                     f'<span class="datei-symbol">🗜</span><span class="datei-name">{html.escape(e["name"])}</span>'
-                    f'<span class="datei-info">{info}</span></a></div>')
+                    f'<span class="datei-info">{info}</span></a>'
+                    f'{druck_hinweis("ZIP-Archiv", f"In der digitalen Version kann hier eine Datei ({einheit}) heruntergeladen werden", e["name"])}</div>')
         if typ == "button":
             text = html.escape(b.get("text") or "Link")
             ziel = html.escape(links.ziel_aufloesen(b.get("ziel") or "", self.ziel_fuer) or "#", quote=True)
             neu = ' target="_blank" rel="noopener"' if ziel.startswith(("http://", "https://")) else ""
             stil = b.get("stil") if b.get("stil") in ("voll", "umrandet") else "voll"
             ausrichtung = b.get("ausrichtung") if b.get("ausrichtung") in AUSRICHTUNGEN else "links"
+            extern = ziel.startswith(("http://", "https://"))
+            ziel_text = (f'Schaltfläche · führt in der digitalen Version zu <span class="druck-url">{ziel}</span>' if extern
+                         else "Schaltfläche · führt in der digitalen Version zu einer verlinkten Seite")
             return (f'<div class="block block-button ausr-{ausrichtung}" data-id="{bid}" data-typ="button">'
-                    f'<a class="seiten-button stil-{stil}" href="{ziel}"{neu}>{text}</a></div>')
+                    f'<a class="seiten-button stil-{stil}" href="{ziel}"{neu}>{text}</a>'
+                    f'<span class="druck-nur druck-button-info">{ziel_text}</span></div>')
         if typ == "spalten":
             spalten = b.get("spalten") or [[], []]
             n = max(2, min(4, len(spalten)))
             inner = "".join(f'<div class="spalte">{"".join(self.block(x) for x in sp)}</div>' for sp in spalten[:n])
             return f'<div class="block block-spalten spalten-{n}" data-id="{bid}" data-typ="spalten">{inner}</div>'
         if typ == "html":
-            return f'<div class="block block-html" data-id="{bid}" data-typ="html">{links.aufloesen(b.get("html", ""), self.ziel_fuer)}</div>'
+            roh = b.get("html", "") or ""
+            interaktiv = re.search(r"<(iframe|video|audio|embed|object|canvas|script)\b", roh, re.I)
+            hinweis = druck_hinweis("Eingebetteter Inhalt", "In der digitalen Version ist hier ein interaktiver oder eingebetteter Inhalt zu sehen") if interaktiv else ""
+            return f'<div class="block block-html" data-id="{bid}" data-typ="html">{links.aufloesen(roh, self.ziel_fuer)}{hinweis}</div>'
         if typ == "kr":
             # lokal: Schalter (reader.js aktiviert sie nur mit laufendem Liloport); Export: nur der Stand
             return kompetenzen.block_html(b, self.rahmen, self.rel, bid, bearbeitbar=None if self.export else True, pfad=self.pfad,
                                           beurteilung=self.beurteilung)
         return self._fehlt(bid, html.escape(typ), f"Blocktyp «{typ}» ist nicht verfügbar.")
+
+
+def druck_hinweis(art: str, text: str, name: str = "") -> str:
+    """Kasten, der nur im Druck erscheint: Was in der digitalen Version an dieser Stelle mehr zu sehen ist."""
+    datei = f' <span class="druck-hinweis-name">«{html.escape(name)}»</span>' if name else ""
+    return (f'<p class="druck-nur druck-hinweis"><span class="druck-hinweis-art">{html.escape(art)}</span>'
+            f'<span class="druck-hinweis-text">{html.escape(text)}{":" if name else "."}{datei}</span></p>')
+
+
+def _ueberschriften_teilen(inhalt: str) -> list:
+    """Teilt das HTML eines Textblocks an Überschriften der obersten Ebene.
+
+    Liefert [(ebene, html), …]; ebene 0 für Text vor der ersten Überschrift, sonst 1–4 (h1–h4).
+    Das HTML kommt aus dem Filter und ist darum sauber verschachtelt."""
+    teile, start, ebene, tiefe = [], 0, 0, 0
+    for m in _TAG.finditer(inhalt):
+        zu, name, selbst = m.group(1), m.group(2).lower(), m.group(3)
+        if name in _LEERE_TAGS or selbst:
+            continue
+        if zu:
+            tiefe = max(0, tiefe - 1)
+            continue
+        if tiefe == 0 and name in ("h1", "h2", "h3", "h4"):
+            if inhalt[start:m.start()].strip():
+                teile.append((ebene, inhalt[start:m.start()].strip()))
+            start, ebene = m.start(), int(name[1])
+        tiefe += 1
+    if inhalt[start:].strip():
+        teile.append((ebene, inhalt[start:].strip()))
+    return teile
+
+
+def gliedern(liste: list, br: "BlockRenderer", gliederung: str) -> str:
+    """Macht die Hierarchie der Überschriften sichtbar: Jede Überschrift (h1–h4 in Textblöcken der obersten
+    Ebene) eröffnet einen Abschnitt <section class="gl-abschnitt gl-hN">, der alles bis zur nächsten
+    Überschrift gleicher oder höherer Ordnung umschliesst – auch Bilder, Spalten und andere Blöcke dazwischen.
+    Textblöcke mit mehreren Überschriften werden dafür an den Überschriften aufgeteilt. Einklappbare Blöcke
+    und Spalten bleiben ganz (ihre Überschriften zählen nicht). Funktioniert ohne JavaScript, auch im Export."""
+    aus, offen, zaehler = [], [], []   # offen: Ebenen der offenen Abschnitte; zaehler: Nummern je Tiefe
+
+    def schliessen(bis_ebene):
+        while offen and offen[-1] >= bis_ebene:
+            offen.pop()
+            aus.append("</section>")
+
+    for b in liste:
+        if b.get("typ") != "text" or b.get("klapp") in ("offen", "zu"):
+            aus.append(br.block(b))
+            continue
+        bid = html.escape(str(b.get("id", "")), quote=True)
+        for i, (ebene, teil) in enumerate(_ueberschriften_teilen(br._text_inhalt(b)) or [(0, "")]):
+            if ebene:
+                schliessen(ebene)
+                tiefe = len(offen)
+                del zaehler[tiefe + 1:]
+                if len(zaehler) <= tiefe:
+                    zaehler.append(0)
+                zaehler[tiefe] += 1
+                nummer = ".".join(str(n) for n in zaehler[:tiefe + 1])
+                if gliederung == "nummern":
+                    teil = re.sub(r"^(<h[1-4][^>]*>)", lambda m: f'{m.group(1)}<span class="gl-nr">{nummer}</span> ', teil, count=1)
+                aus.append(f'<section class="gl-abschnitt gl-h{ebene} gl-tiefe-{tiefe + 1}" data-gliederung="{nummer}">')
+                offen.append(ebene)
+            kennung = f' data-id="{bid}"' if i == 0 else ""
+            aus.append(f'<section class="block block-text{"" if i == 0 else " block-text-teil"}"{kennung} data-typ="text">{teil}</section>')
+    schliessen(0)
+    return f'<div class="gliederung gl-{gliederung}">\n' + "\n".join(aus) + "\n</div>"
 
 
 def _klapp_titel(b: dict) -> str:
@@ -342,11 +434,21 @@ def datum_lesbar(iso: str) -> str:
     return f"{m.group(3)}.{m.group(2)}.{m.group(1)}" if m else ""
 
 
+def zeit_lesbar(iso: str) -> str:
+    """2026-11-06T09:15:42 → 06.11.2026, 09:15"""
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})", iso or "")
+    return f"{m.group(3)}.{m.group(2)}.{m.group(1)}, {m.group(4)}:{m.group(5)}" if m else ""
+
+
 def seiten_meta_html(seite: dict, rel: str = None, datum: bool = True) -> str:
-    """Datum und Tags unter dem Titel; rel=None: Tags ohne Link (Export)."""
+    """Datum, «zuletzt bearbeitet» und Tags unter dem Titel; rel=None: Tags ohne Link (Export)."""
     teile = []
     if datum and datum_lesbar(seite.get("datum", "")):
         teile.append(f'<time datetime="{html.escape(seite["datum"], quote=True)}">{datum_lesbar(seite["datum"])}</time>')
+    if datum and zeit_lesbar(seite.get("geaendert", "")):
+        geaendert = seite["geaendert"]
+        teile.append(f'<span class="zuletzt-bearbeitet" title="Zeitpunkt der letzten Speicherung">zuletzt bearbeitet '
+                     f'<time datetime="{html.escape(geaendert, quote=True)}">{zeit_lesbar(geaendert)}</time></span>')
     tags = [t for t in seite.get("tags") or [] if t]
     if tags:
         if rel is None:
@@ -375,7 +477,7 @@ def seite_html(pfad: str, seite: dict, registry: dict = None, kommentare: list =
     rel = relativ_zur_wurzel(pfad)
     br = BlockRenderer(registry or {}, rel, ziel_fuer=lambda p: f"{rel}{p}.html" if pfade is None or p in pfade else None,
                        rahmen=rahmen, pfad=pfad)
-    bloecke = links.fussnoten("\n".join(br.block(b) for b in seite.get("bloecke", [])))
+    bloecke = links.fussnoten(br.bloecke(seite.get("bloecke", []), seite.get("gliederung", "")))
     if seite.get("verweise") is False:   # Profi: «Verlinkt von» auf dieser Seite ausgeblendet
         verweise = None
     bloecke = seiten_meta_html(seite, rel) + "\n" + bloecke + rueckverweise_html(verweise, br.ziel_fuer)
