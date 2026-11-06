@@ -39,8 +39,9 @@
   var WERKZEUGE_PROFI = [
     { block: 'h4', text: 'H4', title: 'Überschrift 4' },
     { block: 'pre', text: '</> Code', title: 'Codeblock' },
-    { farbe: true, text: 'Farbe', title: 'Textfarbe' },
-    { tabelle: true, text: 'Tabelle', title: 'Tabelle 2×2 einfügen' }
+    { farbe: true, text: 'A', title: 'Schriftfarbe: Palette, HEX-Code oder RGB', stil: 'font-weight:700;text-decoration:underline;text-decoration-color:#8c5fb5;text-decoration-thickness:3px' },
+    { markieren: true, text: 'Markieren', title: 'Text farbig hinterlegen (Textmarker)', stil: 'background:linear-gradient(transparent 55%, #fdf0a6 55%)' },
+    { tabelle: true, text: '▦ Tabelle', title: 'Tabelle einfügen: Grösse, Kopfzeile und Design wählen' }
   ];
 
   function neueId() {
@@ -86,7 +87,9 @@
       alleBloecke().forEach(function (b) { objekte[b.id] = b; });
       zaehler = alleBloecke().length;
       geraetPruefen(); setInterval(geraetPruefen, 60000);
-      try { document.execCommand('styleWithCSS', false, true); } catch (e) { /* egal */ }
+      // Fett, kursiv, unterstrichen als <b>/<i>/<u> statt <span style="…">: nur so übersteht die Formatierung
+      // den HTML-Filter beim Speichern. Für Farben wird styleWithCSS kurz eingeschaltet (siehe mitCss).
+      cssModus(false);
       aufbauen();
     }).catch(function (e) { alert(e.message); });
   }
@@ -120,6 +123,7 @@
       el('button', { text: 'Verlauf', title: 'Frühere Fassungen dieser Seite', onclick: verlaufDialog }),
       el('span', { text: 'Menübar:' }), menue,
       profi ? el('button', { text: 'Seiten-CSS', title: 'Eigenes CSS nur für diese Seite', onclick: cssDialog }) : null,
+      profi ? gliederungWahl() : null,
       profi ? verweiseSchalter() : null,
       el('span', { 'class': 'hinweis', text: profi ? 'Niveau: Profi' : 'Niveau: Amateur' }),
       status
@@ -183,7 +187,8 @@
     var titelFeld = document.getElementById('editor-titel');
     var datumFeld = document.getElementById('editor-datum');
     return { titel: titelFeld ? titelFeld.value : seite.titel, menue: menueEl ? menueEl.value : seite.menue, css: seite.css || '',
-      datum: datumFeld ? datumFeld.value : (seite.datum || ''), tags: tagsLesen(), verweise: seite.verweise !== false, bloecke: bloecke };
+      datum: datumFeld ? datumFeld.value : (seite.datum || ''), tags: tagsLesen(), verweise: seite.verweise !== false,
+      gliederung: seite.gliederung || '', bloecke: bloecke };
   }
 
   function schnappschuss() { return JSON.stringify(zustand()); }
@@ -217,7 +222,7 @@
 
   function anwenden(json) {
     var z = JSON.parse(json);
-    seite.titel = z.titel; seite.menue = z.menue; seite.css = z.css; seite.datum = z.datum; seite.tags = z.tags; seite.verweise = z.verweise; bloecke = z.bloecke;
+    seite.titel = z.titel; seite.menue = z.menue; seite.css = z.css; seite.datum = z.datum; seite.tags = z.tags; seite.verweise = z.verweise; seite.gliederung = z.gliederung || ''; bloecke = z.bloecke;
     objekte = {};
     aufbauen();
     undoStack.push(json); // aufbauen() hat den Stand übernommen; Stack-Spitze = aktueller Stand
@@ -383,6 +388,7 @@
       text.addEventListener('input', function () { b.html = text.innerHTML; geaendertVerzoegert(); });
       text.addEventListener('paste', einfuegenAlsText);
       box.appendChild(text);
+      if (profi) tabellenLeisteAnbinden(box, text);
     } else if (b.typ === 'trenner') {
       box.appendChild(trennerBereich(b));
     } else if (b.typ === 'galerie') {
@@ -523,8 +529,9 @@
         else if (w.block) document.execCommand('formatBlock', false, w.block);
         else if (w.link) { linkDialog(text); return; }
         else if (w.fussnote) { fussnoteDialog(text); return; }
-        else if (w.farbe) farbeWaehlen(text);
-        else if (w.tabelle) document.execCommand('insertHTML', false, '<table><tbody><tr><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table><p></p>');
+        else if (w.farbe) { farbPalette(btn, text, 'schrift'); return; }
+        else if (w.markieren) { farbPalette(btn, text, 'marker'); return; }
+        else if (w.tabelle) { tabelleEinfuegenDialog(btn, text); return; }
         text.dispatchEvent(new Event('input'));
         clearTimeout(geaendertTimer); geaendert();
       });
@@ -533,13 +540,525 @@
     return leiste;
   }
 
-  function farbeWaehlen(text) {
-    var eingabe = el('input', { type: 'color', value: '#1f5f8b' });
-    eingabe.style.position = 'fixed'; eingabe.style.opacity = '0';
-    document.body.appendChild(eingabe);
-    eingabe.addEventListener('input', function () { text.focus(); document.execCommand('foreColor', false, eingabe.value); text.dispatchEvent(new Event('input')); });
-    eingabe.addEventListener('change', function () { eingabe.remove(); });
-    eingabe.click();
+  // ---------- Tabellen (Profi) ----------
+  /* «▦ Tabelle» fügt eine Tabelle mit wählbarer Grösse, Kopfzeile und Design ein. Steht der Cursor in einer
+     Tabelle, erscheint über dem Text die Tabellen-Leiste: Zeilen und Spalten einfügen/löschen, Kopfzeile,
+     erste Spalte, Summenzeile, Beschriftung, Breite, Zellfarbe und Ausrichtung (für Zelle, Zeile oder Spalte)
+     sowie das Design. Gespeichert wird alles als Klassen am <table> bzw. Stil an den Zellen (sanitize.py). */
+
+  var TABELLEN_DESIGNS = [
+    ['', 'Raster', 'Alle Linien, schlicht'],
+    ['tab-schlicht', 'Schlicht', 'Nur waagrechte Linien'],
+    ['tab-gestreift', 'Gestreift', 'Zeilen abwechselnd getönt'],
+    ['tab-teal', 'Teal', 'Kopfzeile in Teal'],
+    ['tab-lavendel', 'Lavendel', 'Kopfzeile in Lavendel, feine Linien'],
+    ['tab-pastell', 'Pastell', 'Kopfzeile im Liloport-Verlauf'],
+    ['tab-luftig', 'Luftig', 'Viel Weissraum, kaum Linien']
+  ];
+  var TABELLEN_SCHALTER = [
+    ['kopf', 'Kopfzeile', 'Erste Zeile als Kopfzeile (fett, wird beim Drucken auf jeder Seite wiederholt)'],
+    ['tab-erste-spalte', 'Erste Spalte', 'Erste Spalte hervorheben'],
+    ['tab-summe', 'Summenzeile', 'Letzte Zeile hervorheben (z. B. Summe)'],
+    ['beschriftung', 'Beschriftung', 'Beschriftung über der Tabelle'],
+    ['tab-breit', 'Volle Breite', 'Tabelle über die ganze Breite'],
+    ['tab-kompakt', 'Kompakt', 'Weniger Innenabstand'],
+    ['tab-zentriert', 'Zentriert', 'Tabelle in der Mitte']
+  ];
+  var ZELLFARBEN = [
+    ['#fdf0a6', 'Gelb'], ['#ffc8dd', 'Rosa'], ['#cdb4db', 'Lavendel'], ['#bde0fe', 'Eisblau'], ['#c7ead8', 'Mint'],
+    ['#fdd9b5', 'Pfirsich'], ['#f4efe6', 'Sand'], ['#e3f1ef', 'Teal hell'], ['#2a7f78', 'Teal'], ['#8c5fb5', 'Violett'],
+    ['#3a2e4a', 'Pflaume'], ['#6b6a64', 'Grau']
+  ];
+
+  function leereZelle(tag) { var c = document.createElement(tag); c.innerHTML = '<br>'; return c; }
+  function zelleUmwandeln(zelle, tag) {
+    if (zelle.tagName.toLowerCase() === tag) return zelle;
+    var neu = document.createElement(tag);
+    [].slice.call(zelle.attributes).forEach(function (a) { neu.setAttribute(a.name, a.value); });
+    while (zelle.firstChild) neu.appendChild(zelle.firstChild);
+    zelle.parentNode.replaceChild(neu, zelle);
+    return neu;
+  }
+  function cursorIn(text, zelle) {
+    if (!zelle) return;
+    text.focus();
+    var r = document.createRange(); r.selectNodeContents(zelle); r.collapse(true);
+    var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  function tabelleNeu(zeilen, spalten, kopf, design) {
+    var t = document.createElement('table');
+    if (design) t.className = design;
+    if (kopf) {
+      var thead = t.appendChild(document.createElement('thead')), kr = thead.appendChild(document.createElement('tr'));
+      for (var k = 0; k < spalten; k++) { var th = kr.appendChild(document.createElement('th')); th.textContent = 'Spalte ' + (k + 1); }
+    }
+    var tbody = t.appendChild(document.createElement('tbody'));
+    for (var z = 0; z < zeilen - (kopf ? 1 : 0); z++) {
+      var tr = tbody.appendChild(document.createElement('tr'));
+      for (var s = 0; s < spalten; s++) tr.appendChild(leereZelle('td'));
+    }
+    return t;
+  }
+
+  function tabelleEinfuegenDialog(knopf, text) {
+    if (popoverUmschalten(knopf)) return;
+    var bereich = auswahlMerken(text);
+    var design = '';
+    var zeilen = el('input', { type: 'number', min: '1', max: '50', value: '4', 'class': 'tab-zahl', 'aria-label': 'Zeilen' });
+    var spalten = el('input', { type: 'number', min: '1', max: '12', value: '3', 'class': 'tab-zahl', 'aria-label': 'Spalten' });
+    var kopf = el('input', { type: 'checkbox', checked: 'checked' });
+    var auswahl = designAuswahl(function (d) { design = d; }, '');
+    function einfuegen() {
+      var z = Math.max(1, Math.min(50, parseInt(zeilen.value, 10) || 4));
+      var sp = Math.max(1, Math.min(12, parseInt(spalten.value, 10) || 3));
+      var t = tabelleNeu(Math.max(z, kopf.checked ? 2 : 1), sp, kopf.checked, design);
+      paletteSchliessen();
+      auswahlZurueck(text, bereich);
+      document.execCommand('insertHTML', false, '<div data-neu-tabelle="1">' + t.outerHTML + '</div><p><br></p>');
+      // Hilfs-Div wieder auflösen (Chrome verschachtelt sonst Tabellen in Absätze)
+      var hilfe = text.querySelector('[data-neu-tabelle]');
+      var eingefuegt = null;
+      if (hilfe) {
+        eingefuegt = hilfe.querySelector('table');
+        while (hilfe.firstChild) hilfe.parentNode.insertBefore(hilfe.firstChild, hilfe);
+        hilfe.remove();
+      }
+      text.dispatchEvent(new Event('input'));
+      clearTimeout(geaendertTimer); geaendert();
+      if (eingefuegt) cursorIn(text, eingefuegt.querySelector('td, th'));
+    }
+    [zeilen, spalten].forEach(function (f) { f.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); einfuegen(); } }); });
+    popoverZeigen(knopf, el('div', { 'class': 'farb-palette tab-popover', role: 'dialog', 'aria-label': 'Tabelle einfügen' }, [
+      el('div', { 'class': 'farb-titel', text: 'Tabelle einfügen' }),
+      el('div', { 'class': 'farb-zeile tab-groesse' }, [
+        el('label', {}, [zeilen, el('span', { text: 'Zeilen' })]), el('span', { text: '×' }),
+        el('label', {}, [spalten, el('span', { text: 'Spalten' })]),
+        el('label', { 'class': 'tab-kopf-wahl' }, [kopf, el('span', { text: 'Kopfzeile' })])
+      ]),
+      el('div', { 'class': 'farb-titel tab-untertitel', text: 'Design' }), auswahl,
+      el('div', { 'class': 'farb-zeile' }, [el('button', { type: 'button', 'class': 'primaer klein', text: 'Einfügen', onclick: einfuegen })])
+    ]));
+  }
+
+  function designAuswahl(gewaehlt, aktuell) {
+    /* Kleine echte Vorschau-Tabellen je Design; Klick wählt. */
+    var feld = el('div', { 'class': 'tab-designs' });
+    TABELLEN_DESIGNS.forEach(function (d) {
+      var mini = tabelleNeu(3, 3, true, d[0]);
+      mini.classList.add('tab-mini');
+      [].slice.call(mini.querySelectorAll('th')).forEach(function (th) { th.textContent = ''; });
+      var b = el('button', { type: 'button', 'class': 'tab-design' + (d[0] === aktuell ? ' aktiv' : ''), title: d[1] + ' – ' + d[2], 'data-design': d[0] }, [mini, el('span', { text: d[1] })]);
+      b.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      b.addEventListener('click', function () {
+        [].slice.call(feld.children).forEach(function (x) { x.classList.toggle('aktiv', x === b); });
+        gewaehlt(d[0]);
+      });
+      feld.appendChild(b);
+    });
+    return feld;
+  }
+
+  function tabellenLeisteAnbinden(box, text) {
+    var leiste = el('div', { 'class': 'tabellen-leiste', hidden: '' });
+    var aktuell = { tabelle: null, zelle: null };
+    var bereichArt = 'zelle';
+    var schalter = {};
+
+    function zellen() {
+      /* Die von der Auswahl berührten Zellen; je nach Bereich erweitert auf ganze Zeilen bzw. Spalten. */
+      var t = aktuell.tabelle; if (!t) return [];
+      var sel = window.getSelection(), r = sel.rangeCount ? sel.getRangeAt(0) : null;
+      var alle = [].slice.call(t.querySelectorAll('td, th'));
+      var getroffen = alle.filter(function (c) { try { return r && r.intersectsNode(c) && c.closest('table') === t; } catch (e) { return false; } });
+      if (!getroffen.length && aktuell.zelle) getroffen = [aktuell.zelle];
+      if (bereichArt === 'zeile') {
+        var zeilen = getroffen.map(function (c) { return c.parentNode; });
+        return alle.filter(function (c) { return zeilen.indexOf(c.parentNode) >= 0; });
+      }
+      if (bereichArt === 'spalte') {
+        var idx = getroffen.map(function (c) { return c.cellIndex; });
+        return alle.filter(function (c) { return idx.indexOf(c.cellIndex) >= 0 && c.closest('table') === t; });
+      }
+      return getroffen;
+    }
+    function fertig(zelle) {
+      text.dispatchEvent(new Event('input'));
+      clearTimeout(geaendertTimer); geaendert();
+      if (zelle && zelle.isConnected) cursorIn(text, zelle);
+      aktualisieren();
+    }
+    function zeileEinfuegen(unten) {
+      var z = aktuell.zelle, tr = z.parentNode, n = tr.cells.length;
+      var neu = document.createElement('tr');
+      var tag = tr.parentNode.tagName === 'THEAD' && !unten ? 'th' : 'td';
+      for (var i = 0; i < n; i++) neu.appendChild(leereZelle(tag));
+      if (tr.parentNode.tagName === 'THEAD' && unten) {
+        var tbody = aktuell.tabelle.tBodies[0] || aktuell.tabelle.appendChild(document.createElement('tbody'));
+        tbody.insertBefore(neu, tbody.firstChild);
+      } else tr.parentNode.insertBefore(neu, unten ? tr.nextSibling : tr);
+      fertig(neu.cells[Math.min(z.cellIndex, n - 1)]);
+    }
+    function zeileLoeschen() {
+      var z = aktuell.zelle, tr = z.parentNode, t = aktuell.tabelle;
+      var ziel = (tr.nextElementSibling || tr.previousElementSibling);
+      tr.remove();
+      [].slice.call(t.querySelectorAll('thead, tbody')).forEach(function (g) { if (!g.rows.length) g.remove(); });
+      if (!t.rows.length) return tabelleLoeschen();
+      if (!ziel || !ziel.isConnected) ziel = t.rows[0];
+      fertig(ziel.cells[Math.min(z.cellIndex, ziel.cells.length - 1)]);
+    }
+    function spalteEinfuegen(rechts) {
+      var idx = aktuell.zelle.cellIndex, ziel = null, zeile = aktuell.zelle.parentNode;
+      [].slice.call(aktuell.tabelle.rows).forEach(function (tr) {
+        var ref = tr.cells[Math.min(idx, tr.cells.length - 1)];
+        var neu = leereZelle(ref ? ref.tagName.toLowerCase() : 'td');
+        if (!ref) tr.appendChild(neu); else tr.insertBefore(neu, rechts ? ref.nextSibling : ref);
+        if (tr === zeile) ziel = neu;
+      });
+      fertig(ziel);
+    }
+    function spalteLoeschen() {
+      var idx = aktuell.zelle.cellIndex, zeile = aktuell.zelle.parentNode, t = aktuell.tabelle;
+      if (Math.max.apply(null, [].slice.call(t.rows).map(function (tr) { return tr.cells.length; })) <= 1) return tabelleLoeschen();
+      [].slice.call(t.rows).forEach(function (tr) { var c = tr.cells[idx]; if (c) c.remove(); });
+      fertig(zeile.cells[Math.min(idx, zeile.cells.length - 1)]);
+    }
+    function kopfUmschalten() {
+      var t = aktuell.tabelle, z = aktuell.zelle, idx = z.cellIndex, zeilenIdx = z.parentNode.rowIndex;
+      var thead = t.tHead;
+      if (thead) {
+        var tbody = t.tBodies[0] || t.appendChild(document.createElement('tbody'));
+        [].slice.call(thead.rows).reverse().forEach(function (tr) {
+          [].slice.call(tr.cells).forEach(function (c) { zelleUmwandeln(c, 'td'); });
+          tbody.insertBefore(tr, tbody.firstChild);
+        });
+        thead.remove();
+      } else {
+        var erste = t.rows[0]; if (!erste) return;
+        var neuKopf = t.createTHead();
+        neuKopf.appendChild(erste);
+        [].slice.call(erste.cells).forEach(function (c) { zelleUmwandeln(c, 'th'); });
+        [].slice.call(t.tBodies).forEach(function (g) { if (!g.rows.length) g.remove(); });
+      }
+      var zr = t.rows[zeilenIdx];
+      fertig(zr ? zr.cells[Math.min(idx, zr.cells.length - 1)] : t.querySelector('td, th'));
+    }
+    function beschriftungUmschalten() {
+      var t = aktuell.tabelle;
+      if (t.caption) { t.deleteCaption(); fertig(aktuell.zelle); return; }
+      var cap = t.createCaption(); cap.textContent = 'Beschriftung';
+      text.dispatchEvent(new Event('input')); clearTimeout(geaendertTimer); geaendert();
+      text.focus(); var r = document.createRange(); r.selectNodeContents(cap);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      aktualisieren();
+    }
+    function klasseUmschalten(k) {
+      aktuell.tabelle.classList.toggle(k);
+      if (!aktuell.tabelle.className) aktuell.tabelle.removeAttribute('class');
+      fertig(aktuell.zelle);
+    }
+    function designSetzen(d) {
+      var t = aktuell.tabelle;
+      TABELLEN_DESIGNS.forEach(function (x) { if (x[0]) t.classList.remove(x[0]); });
+      if (d) t.classList.add(d);
+      if (!t.className) t.removeAttribute('class');
+      fertig(aktuell.zelle);
+    }
+    function tabelleLoeschen() {
+      var t = aktuell.tabelle; if (!t) return;
+      if (!confirm('Diese Tabelle löschen?')) return;
+      var p = document.createElement('p'); p.innerHTML = '<br>';
+      t.parentNode.replaceChild(p, t);
+      aktuell.tabelle = null;
+      text.dispatchEvent(new Event('input')); clearTimeout(geaendertTimer); geaendert();
+      cursorIn(text, p); aktualisieren();
+    }
+    function ausrichten(wert) {
+      var z = zellen(), merk = aktuell.zelle;
+      z.forEach(function (c) { c.style.textAlign = wert; if (!c.getAttribute('style')) c.removeAttribute('style'); });
+      fertig(merk);
+    }
+    function zellFarbe(knopf) {
+      if (popoverUmschalten(knopf)) return;
+      var ziele = zellen(), merk = aktuell.zelle;
+      function setzen(hex) {
+        ziele.forEach(function (c) {
+          c.style.backgroundColor = hex || ''; c.style.color = hex ? textFarbeFuer(hex) : '';
+          if (!c.getAttribute('style')) c.removeAttribute('style');
+        });
+        paletteSchliessen(); fertig(merk);
+      }
+      var feld = el('div', { 'class': 'farb-feld' }, ZELLFARBEN.map(function (f) {
+        var b = el('button', { type: 'button', 'class': 'farb-muster', title: f[1] + ' (' + f[0] + ')', 'aria-label': f[1], 'data-farbe': f[0], onclick: function () { setzen(f[0]); } });
+        b.style.background = f[0]; b.style.color = textFarbeFuer(f[0]); b.textContent = 'Ab';
+        b.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        return b;
+      }));
+      var bereichText = { zelle: ziele.length > 1 ? ziele.length + ' Zellen' : 'Zelle', zeile: 'ganze Zeile', spalte: 'ganze Spalte' }[bereichArt];
+      popoverZeigen(knopf, el('div', { 'class': 'farb-palette', role: 'dialog', 'aria-label': 'Zellfarbe' }, [
+        el('div', { 'class': 'farb-titel', text: 'Hintergrund · ' + bereichText }), feld,
+        el('div', { 'class': 'farb-zeile' }, [el('button', { type: 'button', 'class': 'klein farb-entfernen', text: 'Keine Farbe', onclick: function () { setzen(''); } })]),
+        el('p', { 'class': 'farb-meldung', text: 'Die Schrift wird automatisch dunkel bzw. weiss gesetzt.' })
+      ]));
+    }
+    function designWahl(knopf) {
+      if (popoverUmschalten(knopf)) return;
+      var aktuellDesign = (TABELLEN_DESIGNS.filter(function (d) { return d[0] && aktuell.tabelle.classList.contains(d[0]); })[0] || [''])[0];
+      popoverZeigen(knopf, el('div', { 'class': 'farb-palette tab-popover', role: 'dialog', 'aria-label': 'Tabellen-Design' }, [
+        el('div', { 'class': 'farb-titel', text: 'Design der Tabelle' }),
+        designAuswahl(function (d) { paletteSchliessen(); designSetzen(d); }, aktuellDesign)
+      ]));
+    }
+
+    function knopf(txt, titel, fn, extra) {
+      var b = el('button', { type: 'button', 'class': 'klein' + (extra ? ' ' + extra : ''), text: txt, title: titel, tabindex: '-1' });
+      b.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      b.addEventListener('click', function () { if (aktuell.tabelle && aktuell.zelle && aktuell.zelle.isConnected) fn(b); });
+      return b;
+    }
+    var bereichWahl = el('div', { 'class': 'tab-bereich', role: 'group', 'aria-label': 'Farbe und Ausrichtung gelten für' }, [['zelle', 'Zelle'], ['zeile', 'Zeile'], ['spalte', 'Spalte']].map(function (x) {
+      var b = el('button', { type: 'button', 'class': 'klein' + (x[0] === bereichArt ? ' aktiv' : ''), text: x[1], title: 'Farbe und Ausrichtung gelten für: ' + x[1], tabindex: '-1' });
+      b.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      b.addEventListener('click', function () { bereichArt = x[0]; [].slice.call(bereichWahl.children).forEach(function (y) { y.classList.toggle('aktiv', y === b); }); });
+      return b;
+    }));
+    leiste.appendChild(el('span', { 'class': 'tab-leiste-titel', text: '▦ Tabelle' }));
+    leiste.appendChild(el('div', { 'class': 'tab-gruppe' }, [
+      el('span', { 'class': 'tab-gruppe-name', text: 'Zeile' }),
+      knopf('+ oben', 'Zeile oberhalb einfügen', function () { zeileEinfuegen(false); }),
+      knopf('+ unten', 'Zeile unterhalb einfügen', function () { zeileEinfuegen(true); }),
+      knopf('−', 'Zeile löschen', zeileLoeschen, 'tab-loeschen')
+    ]));
+    leiste.appendChild(el('div', { 'class': 'tab-gruppe' }, [
+      el('span', { 'class': 'tab-gruppe-name', text: 'Spalte' }),
+      knopf('+ links', 'Spalte links einfügen', function () { spalteEinfuegen(false); }),
+      knopf('+ rechts', 'Spalte rechts einfügen', function () { spalteEinfuegen(true); }),
+      knopf('−', 'Spalte löschen', spalteLoeschen, 'tab-loeschen')
+    ]));
+    leiste.appendChild(el('div', { 'class': 'tab-gruppe' }, [
+      el('span', { 'class': 'tab-gruppe-name', text: 'Für' }), bereichWahl,
+      knopf('Farbe', 'Hintergrundfarbe für Zelle, Zeile oder Spalte', zellFarbe, 'tab-farbe-knopf'),
+      knopf('⇤', 'Linksbündig', function () { ausrichten('left'); }),
+      knopf('↔', 'Zentriert', function () { ausrichten('center'); }),
+      knopf('⇥', 'Rechtsbündig', function () { ausrichten('right'); })
+    ]));
+    var schalterGruppe = el('div', { 'class': 'tab-gruppe tab-schalter' });
+    TABELLEN_SCHALTER.forEach(function (x) {
+      var fn = x[0] === 'kopf' ? kopfUmschalten : x[0] === 'beschriftung' ? beschriftungUmschalten : function () { klasseUmschalten(x[0]); };
+      schalter[x[0]] = knopf(x[1], x[2], fn, 'tab-schalt');
+      schalterGruppe.appendChild(schalter[x[0]]);
+    });
+    leiste.appendChild(schalterGruppe);
+    leiste.appendChild(el('div', { 'class': 'tab-gruppe' }, [
+      knopf('Design …', 'Design der Tabelle wählen', designWahl, 'tab-design-knopf'),
+      knopf('Tabelle löschen', 'Ganze Tabelle löschen', tabelleLoeschen, 'tab-loeschen')
+    ]));
+    box.insertBefore(leiste, text);
+
+    function aktualisieren() {
+      var sel = window.getSelection();
+      var knoten = sel && sel.rangeCount ? sel.anchorNode : null;
+      if (offenePalette && leiste.contains(offenePalette.el)) return;   // Popover der Leiste offen: nicht umbauen
+      var elem = knoten && (knoten.nodeType === 1 ? knoten : knoten.parentNode);
+      var t = elem && text.contains(elem) ? elem.closest('table') : null;
+      if (t && !text.contains(t)) t = null;
+      aktuell.tabelle = t;
+      aktuell.zelle = t ? (elem.closest('td, th') || (aktuell.zelle && t.contains(aktuell.zelle) ? aktuell.zelle : t.querySelector('td, th'))) : null;
+      leiste.hidden = !t;
+      if (!t) return;
+      schalter.kopf.classList.toggle('aktiv', !!t.tHead);
+      schalter.beschriftung.classList.toggle('aktiv', !!t.caption);
+      TABELLEN_SCHALTER.forEach(function (x) { if (x[0].indexOf('tab-') === 0) schalter[x[0]].classList.toggle('aktiv', t.classList.contains(x[0])); });
+    }
+    document.addEventListener('selectionchange', aktualisieren);
+    ['focus', 'mouseup', 'keyup'].forEach(function (n) { text.addEventListener(n, aktualisieren); });
+
+    // Tab / Shift+Tab: nächste bzw. vorherige Zelle; Tab in der letzten Zelle hängt eine Zeile an
+    text.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Tab') return;
+      aktualisieren();   // selectionchange kommt verzögert – Zustand hier frisch bestimmen
+      if (!aktuell.tabelle || !aktuell.zelle) return;
+      ev.preventDefault();
+      var alle = [].slice.call(aktuell.tabelle.querySelectorAll('td, th'));
+      var i = alle.indexOf(aktuell.zelle) + (ev.shiftKey ? -1 : 1);
+      if (i >= 0 && i < alle.length) { cursorIn(text, alle[i]); return; }
+      if (!ev.shiftKey) { aktuell.zelle = alle[alle.length - 1]; zeileEinfuegen(true); cursorIn(text, aktuell.tabelle.rows[aktuell.tabelle.rows.length - 1].cells[0]); }
+    });
+  }
+
+  // ---------- Schriftfarbe und Textmarker (Profi) ----------
+  /* Beide öffnen eine kleine Palette unter dem Knopf. Schriftfarbe: Palette, HEX-Code (oder rgb(…)) und der
+     RGB-Farbwähler des Systems. Textmarker: feste Palette passend zum Design; die Schriftfarbe darauf wird
+     automatisch gesetzt (dunkel auf hellen, weiss auf dunklen Tönen) – so bleibt markierter Text auch im
+     dunklen Modus lesbar. */
+
+  function cssModus(an) { try { document.execCommand('styleWithCSS', false, an); } catch (e) { /* egal */ } }
+  function mitCss(befehl, wert) {
+    cssModus(true);
+    try { document.execCommand(befehl, false, wert); } finally { cssModus(false); }
+  }
+
+  var SCHRIFTFARBEN = [
+    ['#2a2a28', 'Dunkelgrau'], ['#6b6a64', 'Grau'], ['#2a7f78', 'Teal'], ['#1f625c', 'Teal dunkel'],
+    ['#1f5f8b', 'Blau'], ['#8c5fb5', 'Violett'], ['#6d4592', 'Violett dunkel'], ['#c2185b', 'Beere'],
+    ['#e4799f', 'Pink'], ['#b3261e', 'Rot'], ['#c46a12', 'Orange'], ['#2f7d4a', 'Grün']
+  ];
+  var MARKERFARBEN = [
+    ['#fdf0a6', 'Gelb'], ['#ffc8dd', 'Rosa'], ['#ffafcc', 'Pink'], ['#cdb4db', 'Lavendel'], ['#bde0fe', 'Eisblau'],
+    ['#c7ead8', 'Mint'], ['#fdd9b5', 'Pfirsich'], ['#2a7f78', 'Teal'], ['#8c5fb5', 'Violett'], ['#3a2e4a', 'Pflaume']
+  ];
+  var TEXT_DUNKEL = '#2a2a28', TEXT_HELL = '#ffffff';
+
+  function farbeLesen(wert) {
+    /* «#2a7f78», «2a7f78», «#abc» oder «rgb(42, 127, 120)» → «#2a7f78»; sonst null. */
+    var w = String(wert || '').trim().toLowerCase();
+    var m = w.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/);
+    if (m) {
+      var teile = [m[1], m[2], m[3]].map(Number);
+      if (teile.some(function (n) { return n > 255; })) return null;
+      return '#' + teile.map(function (n) { return ('0' + n.toString(16)).slice(-2); }).join('');
+    }
+    w = w.replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/.test(w)) w = w.split('').map(function (c) { return c + c; }).join('');
+    return /^[0-9a-f]{6}$/.test(w) ? '#' + w : null;
+  }
+  function luminanz(hex) {
+    return [1, 3, 5].map(function (i) {
+      var c = parseInt(hex.substr(i, 2), 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    }).reduce(function (s, c, i) { return s + c * [0.2126, 0.7152, 0.0722][i]; }, 0);
+  }
+  function kontrast(a, b) {
+    var la = luminanz(a), lb = luminanz(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function textFarbeFuer(hintergrund) {
+    return kontrast(hintergrund, TEXT_DUNKEL) >= kontrast(hintergrund, TEXT_HELL) ? TEXT_DUNKEL : TEXT_HELL;
+  }
+
+  var offenePalette = null;
+  function paletteSchliessen() {
+    if (!offenePalette) return;
+    offenePalette.knopf.classList.remove('aktiv');
+    offenePalette.bloecke.forEach(function (b) { b.classList.remove('palette-offen'); });
+    offenePalette.el.remove();
+    offenePalette = null;
+    document.removeEventListener('mousedown', paletteAusserhalb, true);
+    document.removeEventListener('keydown', paletteEscape, true);
+  }
+  function paletteAusserhalb(ev) {
+    if (offenePalette && !offenePalette.el.contains(ev.target) && ev.target !== offenePalette.knopf) paletteSchliessen();
+  }
+  function paletteEscape(ev) { if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); paletteSchliessen(); } }
+
+  function farbeEntfernen(text, bereich, marker) {
+    /* Entfernt Markierung bzw. Schriftfarbe von allen farbigen Stellen, die die Auswahl berührt. */
+    [].slice.call(text.querySelectorAll('span[style]')).forEach(function (s) {
+      var trifft = false;
+      try { trifft = bereich.intersectsNode(s); } catch (e) { /* egal */ }
+      if (!trifft) return;
+      if (marker) {
+        if (!s.style.backgroundColor) return;
+        s.style.backgroundColor = ''; s.style.color = '';
+      } else {
+        if (s.style.backgroundColor || !s.style.color) return;   // Schrift auf Markierung bleibt lesbar
+        s.style.color = '';
+      }
+      if (!(s.getAttribute('style') || '').trim()) s.removeAttribute('style');
+      if (!s.attributes.length) {
+        while (s.firstChild) s.parentNode.insertBefore(s.firstChild, s);
+        s.remove();
+      }
+    });
+  }
+
+  function farbPalette(knopf, text, art) {
+    var marker = art === 'marker';
+    if (popoverUmschalten(knopf)) return;   // zweiter Klick auf denselben Knopf schliesst nur
+    var bereich = auswahlMerken(text);
+    var meldung = el('p', { 'class': 'farb-meldung', text: bereich.collapsed ? 'Tipp: Zuerst Text markieren – sonst gilt die Farbe für das, was du als Nächstes tippst.' : '' });
+
+    function gespeichert() {
+      text.dispatchEvent(new Event('input'));
+      clearTimeout(geaendertTimer); geaendert();
+    }
+    function anwenden(hex, offenLassen) {
+      auswahlZurueck(text, bereich);
+      if (marker) { mitCss('hiliteColor', hex); mitCss('foreColor', textFarbeFuer(hex)); }
+      else mitCss('foreColor', hex);
+      bereich = auswahlMerken(text);
+      if (!offenLassen) paletteSchliessen();
+      gespeichert();
+    }
+    function feld(farben) {
+      return el('div', { 'class': 'farb-feld' }, farben.map(function (f) {
+        var titel = f[1] + ' (' + f[0] + ')';
+        var b = el('button', { type: 'button', 'class': 'farb-muster', title: titel, 'aria-label': titel, 'data-farbe': f[0], onclick: function () { anwenden(f[0]); } });
+        b.style.background = f[0];
+        if (marker) { b.style.color = textFarbeFuer(f[0]); b.textContent = 'Ab'; }
+        b.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+        return b;
+      }));
+    }
+    var entfernen = el('button', { type: 'button', 'class': 'klein farb-entfernen', text: marker ? 'Markierung entfernen' : 'Standardfarbe', onclick: function () {
+      farbeEntfernen(text, bereich, marker);
+      auswahlZurueck(text, bereich);
+      paletteSchliessen();
+      gespeichert();
+    } });
+    entfernen.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+
+    var inhalt = [el('div', { 'class': 'farb-titel', text: marker ? 'Textmarker' : 'Schriftfarbe' }), feld(marker ? MARKERFARBEN : SCHRIFTFARBEN)];
+    if (!marker) {
+      // HEX-Code (auch #abc oder rgb(…)) und der RGB-Farbwähler des Systems
+      var vorschau = el('span', { 'class': 'farb-vorschau' });
+      var hex = el('input', { type: 'text', 'class': 'farb-hex', placeholder: '#2a7f78', maxlength: '20', spellcheck: 'false', 'aria-label': 'HEX-Code', title: 'HEX-Code, z. B. #2a7f78 oder #c25 – auch rgb(42, 127, 120)' });
+      var hexAnwenden = function () {
+        var f = farbeLesen(hex.value);
+        if (!f) { meldung.textContent = 'Bitte einen HEX-Code wie #2a7f78 oder #c25 eingeben.'; hex.focus(); return; }
+        anwenden(f);
+      };
+      hex.addEventListener('input', function () { var f = farbeLesen(hex.value); vorschau.style.background = f || 'transparent'; vorschau.classList.toggle('leer', !f); meldung.textContent = ''; });
+      hex.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); hexAnwenden(); } });
+      vorschau.classList.add('leer');
+      var system = el('input', { type: 'color', 'class': 'farb-system', value: '#1f5f8b', tabindex: '-1', 'aria-hidden': 'true' });
+      system.addEventListener('input', function () { hex.value = system.value; vorschau.style.background = system.value; vorschau.classList.remove('leer'); anwenden(system.value, true); });
+      system.addEventListener('change', function () { paletteSchliessen(); });
+      var rgb = el('button', { type: 'button', 'class': 'klein', text: 'RGB-Farbwähler …', title: 'Beliebige Farbe mit dem Farbwähler des Systems (RGB) wählen', onclick: function () { system.click(); } });
+      rgb.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+      inhalt.push(el('div', { 'class': 'farb-zeile' }, [
+        el('label', { 'class': 'farb-hex-label' }, [el('span', { text: 'HEX' }), vorschau, hex]),
+        el('button', { type: 'button', 'class': 'klein', text: 'OK', onclick: hexAnwenden })
+      ]));
+      inhalt.push(el('div', { 'class': 'farb-zeile' }, [rgb, system, entfernen]));
+    } else {
+      inhalt.push(el('div', { 'class': 'farb-zeile' }, [entfernen]));
+    }
+    inhalt.push(meldung);
+
+    popoverZeigen(knopf, el('div', { 'class': 'farb-palette' + (marker ? ' marker' : ''), role: 'dialog', 'aria-label': marker ? 'Textmarker' : 'Schriftfarbe' }, inhalt));
+  }
+
+  function popoverUmschalten(knopf) {
+    /* Schliesst einen offenen Popover; true, wenn er zu diesem Knopf gehörte (zweiter Klick schliesst nur). */
+    if (!offenePalette) return false;
+    var gleich = offenePalette.knopf === knopf;
+    paletteSchliessen();
+    return gleich;
+  }
+  function popoverZeigen(knopf, pop) {
+    /* Zeigt pop unter knopf, innerhalb der Werkzeug- bzw. Tabellenleiste; schliesst bei Klick daneben/Escape. */
+    var leiste = knopf.closest('.werkzeuge, .tabellen-leiste') || knopf.parentNode;
+    leiste.appendChild(pop);
+    var kr = knopf.getBoundingClientRect(), lr = leiste.getBoundingClientRect();
+    pop.style.top = (kr.bottom - lr.top + 4) + 'px';
+    pop.style.left = Math.max(4, Math.min(kr.left - lr.left, leiste.clientWidth - pop.offsetWidth - 4)) + 'px';
+    knopf.classList.add('aktiv');
+    var umgebend = [];   // Block (und Spalten-Block drumherum) über die folgenden Blöcke legen
+    for (var b = knopf.closest('.editor-block'); b; b = b.parentNode.closest('.editor-block')) { b.classList.add('palette-offen'); umgebend.push(b); }
+    offenePalette = { el: pop, knopf: knopf, bloecke: umgebend };
+    document.addEventListener('mousedown', paletteAusserhalb, true);
+    document.addEventListener('keydown', paletteEscape, true);
   }
 
   /* ---------- Interne Links, Fussnoten ---------- */
@@ -663,6 +1182,17 @@
     box.checked = seite.verweise !== false;
     box.addEventListener('change', function () { seite.verweise = box.checked; geaendert(); });
     return el('label', { 'class': 'editor-schalter', title: 'Zeigt unten auf der Seite, welche anderen Seiten hierher verlinken' }, [box, el('span', { text: '«Verlinkt von» zeigen' })]);
+  }
+
+  var GLIEDERUNGEN = [['', 'Gliederung: Standard'], ['linien', 'Gliederung: Leitlinien'], ['flaechen', 'Gliederung: Flächen'], ['nummern', 'Gliederung: Nummeriert']];
+  function gliederungWahl() {
+    /* Profi: Hierarchie der Überschriften auf der Seite sichtbar machen – welcher Text zu welcher H1, H2 … gehört.
+       Gerendert wird sie beim Speichern (render.gliedern); hier nur die Wahl des Designs. */
+    var sel = el('select', { id: 'editor-gliederung', title: 'Macht sichtbar, welcher Inhalt zu welcher Überschrift (H1–H4) gehört. Standard: Kapitel mit farbigen Überschriften · Leitlinien: dezente Linien rechts je Ebene · Flächen: oben gezeichnete Boxen · Nummeriert: wie Standard mit 1, 1.1, 1.1.1' },
+      GLIEDERUNGEN.map(function (g) { return el('option', { value: g[0], text: g[1] }); }));
+    sel.value = seite.gliederung || '';
+    sel.addEventListener('change', function () { seite.gliederung = sel.value; geaendert(); });
+    return sel;
   }
 
   function cssDialog() {
@@ -839,6 +1369,15 @@
   var TRENNER_ARTEN = [['', 'durchgezogen'], ['gestrichelt', 'gestrichelt'], ['gepunktet', 'gepunktet'], ['doppelt', 'doppelt']];
   var TRENNER_CSS = { gestrichelt: 'dashed', gepunktet: 'dotted', doppelt: 'double' };
   var TRENNER_STANDARDFARBE = '#e3dccf';   // var(--pg-rand) hell; nur als Vorbelegung des Farbwählers
+  // Drei Vorlagen (Amateur und Profi): setzen alle Felder auf einmal; danach lässt sich alles weiter anpassen
+  var TRENNER_VORLAGEN = [
+    { name: 'Grosse Punkte', titel: 'Standardfarbe, gepunktet, 8 px, Abstand oben und unten je 50 px',
+      werte: { stil: 'gepunktet', dicke: 8, abstandOben: 50, abstandUnten: 50 } },
+    { name: 'Akzentlinie', titel: 'Teal, durchgezogen, 3 px, Abstand oben und unten je 32 px – trennt Kapitel deutlich',
+      werte: { farbe: '#2a7f78', dicke: 3, abstandOben: 32, abstandUnten: 32 } },
+    { name: 'Dezent gestrichelt', titel: 'Standardfarbe, gestrichelt, 2 px, Abstand oben und unten je 16 px – für kleine Absätze',
+      werte: { stil: 'gestrichelt', dicke: 2, abstandOben: 16, abstandUnten: 16 } }
+  ];
 
   function trennerBereich(b) {
     var hr = el('hr');
@@ -877,9 +1416,26 @@
     }
     var oben = abstandFeld('abstandOben', 'Abstand zum Block davor in Pixel (leer = Standard)');
     var unten = abstandFeld('abstandUnten', 'Abstand zum Block danach in Pixel (leer = Standard)');
+    function felderZeigen() {
+      farbe.value = /^#[0-9a-fA-F]{6}$/.test(b.farbe || '') ? b.farbe : TRENNER_STANDARDFARBE;
+      art.value = TRENNER_CSS[b.stil] ? b.stil : '';
+      dicke.value = b.dicke || 1;
+      oben.value = b.abstandOben === undefined ? '' : b.abstandOben;
+      unten.value = b.abstandUnten === undefined ? '' : b.abstandUnten;
+    }
+    var vorlagen = el('div', { 'class': 'trenner-vorlagen' }, [el('span', { 'class': 'klein-text', text: 'Vorlage:' })].concat(TRENNER_VORLAGEN.map(function (v) {
+      var muster = el('span', { 'class': 'trenner-muster' });
+      var art = TRENNER_CSS[v.werte.stil] || 'solid';
+      muster.style.borderTop = Math.min(v.werte.dicke || 1, 6) + 'px ' + art + ' ' + (v.werte.farbe || 'var(--pg-rand)');
+      return el('button', { type: 'button', 'class': 'klein trenner-vorlage', title: v.titel, onclick: function () {
+        ['farbe', 'stil', 'dicke', 'abstandOben', 'abstandUnten'].forEach(function (k) { delete b[k]; });
+        Object.keys(v.werte).forEach(function (k) { b[k] = v.werte[k]; });
+        felderZeigen(); vorschau(); geaendert();
+      } }, [muster, el('span', { text: v.name })]);
+    })));
     vorschau();
     return el('div', { 'class': 'editor-trenner' }, [
-      hr,
+      hr, vorlagen,
       el('div', { 'class': 'medien-felder trenner-felder' }, [
         el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Farbe:' }), farbe, farbeWeg]),
         el('label', { 'class': 'feld-zeile' }, [el('span', { text: 'Linienart:' }), art]),
@@ -1178,7 +1734,7 @@
     speichertGerade = true;
     statusEl.textContent = 'speichert …';
     fetch('/api/seiten/' + pfad, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, keepalive: !!keepalive,
-      body: JSON.stringify({ titel: titel, menue: z.menue, bloecke: z.bloecke, css: z.css, datum: z.datum, tags: z.tags, verweise: z.verweise,
+      body: JSON.stringify({ titel: titel, menue: z.menue, bloecke: z.bloecke, css: z.css, datum: z.datum, tags: z.tags, verweise: z.verweise, gliederung: z.gliederung,
         basis: seite.geaendert, erzwingen: erzwingen, editor: editorKennung }) })
       .then(function (r) { return r.json(); })
       .then(function (j) {

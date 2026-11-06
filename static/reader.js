@@ -323,33 +323,155 @@
   }
 
   /* ---------- Verzeichnismenü der Seite ---------- */
+  /* Für grosse Portfolios (viele Verzeichnisse, tiefe Verschachtelung, lange Seitenlisten):
+     - Brotkrumen über dem Titel zeigen, wo die Seite liegt; ein Klick öffnet das Menü an dieser Stelle
+     - Seitensuche (Strg/Cmd+K): alle Seiten nach Titel, Verzeichnis und Tags; ohne Eingabe die zuletzt bearbeiteten
+     - Leiste oben: eine Zeile, was nicht passt, liegt unter «Mehr»; ein Klick öffnet ein Panel mit den Seiten in
+       Spalten, Unterverzeichnisse aufklappbar, ab vielen Seiten mit Filter
+     - Seitenmenü links: Filterfeld, nur der Weg zur aktuellen Seite offen, Führungslinien, lange Listen gekürzt */
 
-  function kinderVon(elternId) {
+  function alleKinderVon(elternId) {   // auch Verzeichnisse, die nicht im Menü stehen (für andere Skripte)
     return daten.verzeichnisse.filter(function (v) { return (v.eltern || null) === elternId; })
       .sort(function (a, b) { return (a.reihenfolge - b.reihenfolge) || a.name.localeCompare(b.name, 'de'); });
   }
-
-  function seitenLink(s, aktuellerPfad) {
+  function kinderVon(elternId) {   // nur Verzeichnisse im Menü
+    return daten.verzeichnisse.filter(function (v) { return (v.eltern || null) === elternId && v.inMenue !== false; })
+      .sort(function (a, b) { return (a.reihenfolge - b.reihenfolge) || a.name.localeCompare(b.name, 'de'); });
+  }
+  function verzNach(id) { return daten.verzeichnisse.filter(function (v) { return v.id === id; })[0] || null; }
+  function vorfahren(v) {   // [Wurzel, …, v]
+    var kette = [];
+    for (var x = v; x; x = x.eltern ? verzNach(x.eltern) : null) { kette.unshift(x); if (kette.length > 50) break; }
+    return kette;
+  }
+  function istAktuell(s, pfad) { return s.pfad === pfad || s.ziel === pfad; }
+  var anzahlCache = {};
+  function anzahl(v) {   // Seiten im ganzen Teilbaum
+    if (anzahlCache[v.id] === undefined) anzahlCache[v.id] = v.seiten.length + kinderVon(v.id).reduce(function (n, k) { return n + anzahl(k); }, 0);
+    return anzahlCache[v.id];
+  }
+  function enthaeltAktuell(v, pfad) {
+    return v.seiten.some(function (s) { return istAktuell(s, pfad); }) || kinderVon(v.id).some(function (k) { return enthaeltAktuell(k, pfad); });
+  }
+  function aktuellesVerzeichnis(pfad) {
+    var treffer = daten.verzeichnisse.filter(function (v) { return v.seiten.some(function (s) { return s.pfad === pfad && !s.redirect; }); });
+    if (!treffer.length) treffer = daten.verzeichnisse.filter(function (v) { return v.seiten.some(function (s) { return istAktuell(s, pfad); }); });
+    return treffer[0] || null;
+  }
+  function sichtbarImMenue(v) { return vorfahren(v).every(function (x) { return x.inMenue !== false; }); }
+  function seitenLink(s, pfad) {
     var a = el('a', { href: rel + s.pfad + '.html', text: s.titel });
-    if (s.pfad === aktuellerPfad || s.ziel === aktuellerPfad) a.className = 'aktuell';
+    if (istAktuell(s, pfad)) { a.className = 'aktuell'; a.setAttribute('aria-current', 'page'); }
     return a;
   }
 
-  function baum(elternId, nurImMenue, aktuellerPfad) {
-    var liste = kinderVon(elternId).filter(function (v) { return !nurImMenue || v.inMenue; });
-    if (!liste.length) return null;
-    var ul = el('ul');
-    liste.forEach(function (v) {
-      var li = el('li', { 'class': 'verzeichnis' }, [el('span', { text: v.name, tabindex: '0' })]);
-      var inner = el('ul');
-      v.seiten.forEach(function (s) { inner.appendChild(el('li', null, [seitenLink(s, aktuellerPfad)])); });
-      var unter = baum(v.id, nurImMenue, aktuellerPfad);
-      if (unter) Array.prototype.slice.call(unter.children).forEach(function (c) { inner.appendChild(c); });
-      if (!inner.children.length) inner.appendChild(el('li', null, [el('span', { 'class': 'hinweis', text: 'keine Seiten' })]));
-      li.appendChild(inner);
-      ul.appendChild(li);
+  // Suche über alle Seiten im Menü
+  function normal(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  var eintraegeCache = null;
+  function alleEintraege() {
+    if (eintraegeCache) return eintraegeCache;
+    eintraegeCache = [];
+    daten.verzeichnisse.forEach(function (v) {
+      if (!sichtbarImMenue(v)) return;
+      var ort = vorfahren(v).map(function (x) { return x.name; }).join(' › ');
+      v.seiten.forEach(function (s) {
+        eintraegeCache.push({ s: s, v: v, ort: ort, titelN: normal(s.titel), allesN: normal(s.titel + ' ' + ort + ' ' + (s.tags || []).join(' ')) });
+      });
     });
+    return eintraegeCache;
+  }
+  function suchen(text, imVerz) {
+    var woerter = normal(text).split(/\s+/).filter(Boolean);
+    var liste = alleEintraege();
+    if (imVerz) liste = liste.filter(function (e) { return vorfahren(e.v).indexOf(imVerz) >= 0; });
+    if (!woerter.length) {   // ohne Eingabe: zuletzt bearbeitet (ohne Doppelte)
+      var gesehen = {};
+      return liste.filter(function (e) { var k = e.s.ziel || e.s.pfad; if (gesehen[k] || e.s.redirect) return false; gesehen[k] = 1; return true; })
+        .sort(function (a, b) { return String(b.s.geaendert || '').localeCompare(String(a.s.geaendert || '')); }).slice(0, 8);
+    }
+    return liste.filter(function (e) { return woerter.every(function (w) { return e.allesN.indexOf(w) >= 0; }); })
+      .map(function (e) {
+        var p = e.titelN.indexOf(woerter[0]);
+        return { e: e, rang: p === 0 ? 0 : p > 0 ? 1 : 2 };
+      })
+      .sort(function (a, b) { return (a.rang - b.rang) || a.e.s.titel.localeCompare(b.e.s.titel, 'de'); })
+      .slice(0, 60).map(function (x) { return x.e; });
+  }
+  function trefferListe(ergebnisse, pfad, leerText) {
+    var ul = el('ul', { 'class': 'nav-treffer', role: 'listbox' });
+    ergebnisse.forEach(function (e, i) {
+      var a = el('a', { href: rel + e.s.pfad + '.html', role: 'option', 'class': (istAktuell(e.s, pfad) ? 'aktuell' : '') + (i === 0 ? ' gewaehlt' : '') }, [
+        el('span', { 'class': 'nav-treffer-titel', text: e.s.titel }),
+        el('span', { 'class': 'nav-treffer-ort', text: e.ort })
+      ]);
+      ul.appendChild(el('li', null, [a]));
+    });
+    if (!ergebnisse.length) ul.appendChild(el('li', { 'class': 'nav-leer', text: leerText || 'Keine Seite gefunden.' }));
     return ul;
+  }
+  function pfeiltasten(feld, holeListe) {
+    /* ↑/↓ wählt einen Treffer, Enter öffnet ihn */
+    feld.addEventListener('keydown', function (ev) {
+      var liste = holeListe(); if (!liste) return;
+      var links = [].slice.call(liste.querySelectorAll('a'));
+      if (!links.length) return;
+      var i = links.indexOf(liste.querySelector('a.gewaehlt'));
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        i = ev.key === 'ArrowDown' ? Math.min(links.length - 1, i + 1) : Math.max(0, i - 1);
+        links.forEach(function (a, j) { a.classList.toggle('gewaehlt', j === i); });
+        links[i].scrollIntoView({ block: 'nearest' });
+      } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        location.href = (links[i] || links[0]).href;
+      }
+    });
+  }
+
+  // Seitensuche als Fenster (Leiste oben; Strg/Cmd+K)
+  var finder = null;
+  function finderOeffnen(pfad) {
+    if (!finder) {
+      var feld = el('input', { type: 'search', 'class': 'nav-finder-feld', placeholder: 'Seite suchen – Titel, Verzeichnis oder Tag', 'aria-label': 'Seite suchen', autocomplete: 'off', spellcheck: 'false' });
+      var titel = el('p', { 'class': 'nav-finder-hinweis' });
+      var ergebnis = el('div', { 'class': 'nav-finder-ergebnis' });
+      var box = el('div', { 'class': 'nav-finder', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Seite suchen' }, [feld, titel, ergebnis,
+        el('p', { 'class': 'nav-finder-fuss', text: '↑ ↓ wählen · Enter öffnen · Esc schliessen' })]);
+      var hinter = el('div', { 'class': 'nav-finder-hinter' }, [box]);
+      var zeigen = function () {
+        titel.textContent = feld.value.trim() ? '' : 'Zuletzt bearbeitet';
+        ergebnis.innerHTML = '';
+        ergebnis.appendChild(trefferListe(suchen(feld.value), pfad));
+      };
+      feld.addEventListener('input', zeigen);
+      pfeiltasten(feld, function () { return ergebnis.querySelector('.nav-treffer'); });
+      hinter.addEventListener('mousedown', function (ev) { if (ev.target === hinter) finderSchliessen(); });
+      hinter.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.preventDefault(); finderSchliessen(); } });
+      finder = { hinter: hinter, feld: feld, zeigen: zeigen, vorher: null };
+      document.body.appendChild(hinter);
+    }
+    finder.vorher = document.activeElement;
+    finder.hinter.classList.add('offen');
+    finder.feld.value = '';
+    finder.zeigen();
+    finder.feld.focus();
+  }
+  function finderSchliessen() {
+    if (!finder) return;
+    finder.hinter.classList.remove('offen');
+    if (finder.vorher && finder.vorher.focus) finder.vorher.focus();
+  }
+
+  function brotkrumen(pfad, oeffnen) {
+    var v = aktuellesVerzeichnis(pfad);
+    var titel = document.getElementById('seitentitel');
+    if (!v || !titel || !sichtbarImMenue(v)) return;
+    var nav = el('nav', { 'class': 'brotkrumen', 'aria-label': 'Ort der Seite' });
+    vorfahren(v).forEach(function (x, i) {
+      if (i) nav.appendChild(el('span', { 'class': 'brotkrumen-trenner', 'aria-hidden': 'true', text: '›' }));
+      nav.appendChild(el('button', { type: 'button', text: x.name, title: 'Im Menü zeigen: ' + x.name, onclick: function (ev) { oeffnen(x, ev.currentTarget); } }));
+    });
+    titel.parentNode.insertBefore(nav, titel);
   }
 
   function menueAufbauen() {
@@ -357,68 +479,262 @@
     if (!nav || istDashboard) return;
     var modus = body.dataset.menue || 'voll';
     var pfad = body.dataset.pfad || '';
-    if (modus === 'keine') return;
-    var tree = baum(null, true, pfad);
-    if (!tree) return;
-    if (modus === 'voll') { nav.appendChild(tree); return; }
-    seitenmenue(pfad);
+    if (modus === 'keine' || !kinderVon(null).length) return;
+    var oeffnen = modus === 'voll' ? obenMenue(nav, pfad) : seitenmenue(pfad);
+    brotkrumen(pfad, oeffnen);
+    // Strg/Cmd+K: Seite suchen (nicht beim Schreiben in Feldern oder im Editor)
+    document.addEventListener('keydown', function (ev) {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || ev.key.toLowerCase() !== 'k') return;
+      var t = ev.target;
+      if (t && t.closest && t.closest('input, textarea, select, [contenteditable], .editor-block')) return;
+      ev.preventDefault();
+      if (modus === 'voll') finderOeffnen(pfad); else oeffnen(null);
+    });
+  }
+
+  /* Leiste oben */
+  function obenMenue(nav, pfad) {
+    var oben = kinderVon(null);
+    var haupt = el('ul', { 'class': 'menue-haupt' });
+    var punkte = [];
+    var offen = null;   // { v, knopf, panel }
+    var panel = el('div', { 'class': 'menue-panel', hidden: '' });
+    var mehrKnopf = el('button', { type: 'button', 'class': 'menue-knopf', 'aria-haspopup': 'true', 'aria-expanded': 'false' }, [el('span', { text: 'Mehr' }), el('span', { 'class': 'pfeil', text: '▾' })]);
+    var mehrLi = el('li', { 'class': 'menue-mehr', hidden: '' }, [mehrKnopf]);
+
+    oben.forEach(function (v) {
+      var knopf = el('button', { type: 'button', 'class': 'menue-knopf', 'aria-haspopup': 'true', 'aria-expanded': 'false' }, [el('span', { text: v.name }), el('span', { 'class': 'pfeil', text: '▾' })]);
+      var li = el('li', { 'class': 'menue-punkt' + (enthaeltAktuell(v, pfad) ? ' im-pfad' : '') }, [knopf]);
+      knopf.addEventListener('click', function () { umschalten(v, knopf); });
+      punkte.push({ v: v, li: li });
+      haupt.appendChild(li);
+    });
+    haupt.appendChild(mehrLi);
+    mehrKnopf.addEventListener('click', function () { umschalten('mehr', mehrKnopf); });
+    var finden = el('button', { type: 'button', 'class': 'menue-finden', title: 'Seite suchen (Strg/Cmd+K)', onclick: function () { schliessen(); finderOeffnen(pfad); } }, [
+      el('span', { 'class': 'lupe', 'aria-hidden': 'true' }), el('span', { 'class': 'menue-finden-text', text: 'Seite suchen' }), el('kbd', { text: /Mac|iP/.test(navigator.platform) ? '⌘K' : 'Strg K' })
+    ]);
+    nav.appendChild(el('div', { 'class': 'menue-zeile' }, [haupt, finden]));
+    nav.appendChild(panel);
+
+    function anordnen() {
+      /* So viele Hauptverzeichnisse wie in eine Zeile passen; der Rest kommt unter «Mehr». */
+      punkte.forEach(function (p) { p.li.hidden = false; });
+      mehrLi.hidden = true;
+      if (haupt.scrollWidth <= haupt.clientWidth + 1) return;
+      mehrLi.hidden = false;
+      for (var i = punkte.length - 1; i >= 0 && haupt.scrollWidth > haupt.clientWidth + 1; i--) {
+        if (punkte[i].li.classList.contains('im-pfad') && i > 0) {   // aktuelles Verzeichnis möglichst sichtbar lassen
+          var j = i - 1; while (j >= 0 && punkte[j].li.hidden) j--;
+          if (j >= 0) { punkte[j].li.hidden = true; i++; continue; }
+        }
+        punkte[i].li.hidden = true;
+      }
+      mehrKnopf.classList.toggle('im-pfad', punkte.some(function (p) { return p.li.hidden && p.li.classList.contains('im-pfad'); }));
+    }
+    anordnen();
+    var zeitgeber = null;
+    window.addEventListener('resize', function () { clearTimeout(zeitgeber); zeitgeber = setTimeout(function () { schliessen(); anordnen(); }, 120); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(anordnen);
+
+    function schliessen() {
+      if (!offen) return;
+      offen.knopf.setAttribute('aria-expanded', 'false');
+      offen.knopf.classList.remove('offen');
+      panel.hidden = true; panel.innerHTML = '';
+      offen = null;
+    }
+    function umschalten(v, knopf, zielVerz) {
+      if (offen && offen.knopf === knopf && offen.v === v && !zielVerz) { schliessen(); return; }
+      schliessen();
+      panel.innerHTML = '';
+      panel.appendChild(v === 'mehr' ? mehrInhalt() : panelInhalt(v, zielVerz));
+      panel.hidden = false;
+      panel.classList.toggle('schmal', v === 'mehr');
+      // «Mehr» als schmales Menü unter dem Knopf, Verzeichnisse über die ganze Breite
+      if (v === 'mehr') {
+        var r = knopf.getBoundingClientRect(), n = nav.getBoundingClientRect();
+        panel.style.left = Math.max(8, Math.min(r.left - n.left, n.width - 300)) + 'px';
+      } else panel.style.left = '';
+      knopf.setAttribute('aria-expanded', 'true');
+      knopf.classList.add('offen');
+      offen = { v: v, knopf: knopf };
+      var ziel = panel.querySelector('.ziel') || panel.querySelector('a.aktuell');
+      if (ziel) ziel.scrollIntoView({ block: 'nearest' });
+      var feld = panel.querySelector('input'); if (feld && !zielVerz) feld.focus({ preventScroll: true });
+    }
+    function mehrInhalt() {
+      var ul = el('ul', { 'class': 'menue-mehr-liste' });
+      punkte.filter(function (p) { return p.li.hidden; }).forEach(function (p) {
+        var b = el('button', { type: 'button', 'class': p.li.classList.contains('im-pfad') ? 'im-pfad' : '' }, [
+          el('span', { text: p.v.name }), el('span', { 'class': 'nav-zahl', text: String(anzahl(p.v)) })]);
+        b.addEventListener('click', function () { umschalten(p.v, mehrKnopf, null); });
+        ul.appendChild(el('li', null, [b]));
+      });
+      return ul;
+    }
+    function panelInhalt(v, zielVerz) {
+      var gesamt = anzahl(v);
+      var kopf = el('div', { 'class': 'menue-panel-kopf' }, [
+        el('span', { 'class': 'menue-panel-titel', text: v.name }),
+        el('span', { 'class': 'nav-zahl', text: gesamt === 1 ? '1 Seite' : gesamt + ' Seiten' })
+      ]);
+      var rumpfEl = el('div', { 'class': 'menue-panel-rumpf' });
+      var baumEl = abschnitt(v, 0, zielVerz);
+      rumpfEl.appendChild(baumEl);
+      if (gesamt > 10) {
+        var feld = el('input', { type: 'search', 'class': 'menue-filter', placeholder: 'In «' + v.name + '» suchen', 'aria-label': 'In ' + v.name + ' suchen', autocomplete: 'off' });
+        var treffer = el('div', { 'class': 'menue-filter-treffer', hidden: '' });
+        feld.addEventListener('input', function () {
+          var q = feld.value.trim();
+          baumEl.hidden = !!q; treffer.hidden = !q;
+          treffer.innerHTML = '';
+          if (q) treffer.appendChild(trefferListe(suchen(q, v), pfad));
+        });
+        pfeiltasten(feld, function () { return treffer.hidden ? null : treffer.querySelector('.nav-treffer'); });
+        kopf.appendChild(feld);
+        rumpfEl.appendChild(treffer);
+      }
+      return el('div', null, [kopf, rumpfEl]);
+    }
+    function abschnitt(v, tiefe, zielVerz) {
+      var box = el('div', { 'class': 'menue-abschnitt' });
+      if (v.seiten.length) {
+        var ul = el('ul', { 'class': 'menue-seiten' });
+        v.seiten.forEach(function (s) { ul.appendChild(el('li', null, [seitenLink(s, pfad)])); });
+        box.appendChild(ul);
+      }
+      kinderVon(v.id).forEach(function (k) {
+        var mitZiel = zielVerz && vorfahren(zielVerz).indexOf(k) >= 0;
+        var d = el('details', { 'class': 'menue-unterverz tiefe-' + Math.min(tiefe + 1, 4) + (zielVerz === k ? ' ziel' : '') });
+        if (enthaeltAktuell(k, pfad) || mitZiel || (tiefe === 0 && anzahl(v) <= 40)) d.open = true;
+        d.appendChild(el('summary', null, [el('span', { text: k.name }), el('span', { 'class': 'nav-zahl', text: String(anzahl(k)) })]));
+        d.appendChild(abschnitt(k, tiefe + 1, zielVerz));
+        box.appendChild(d);
+      });
+      if (!box.children.length) box.appendChild(el('p', { 'class': 'nav-leer', text: 'keine Seiten' }));
+      return box;
+    }
+
+    document.addEventListener('mousedown', function (ev) { if (offen && !nav.contains(ev.target) && !(ev.target.closest && ev.target.closest('.brotkrumen'))) schliessen(); });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && offen) { var k = offen.knopf; schliessen(); k.focus(); } });
+
+    // Brotkrumen: Panel des Hauptverzeichnisses öffnen, das gewählte Unterverzeichnis aufgeklappt
+    return function (x) {
+      if (!x) { finderOeffnen(pfad); return; }
+      var wurzel = vorfahren(x)[0];
+      var p = punkte.filter(function (q) { return q.v === wurzel; })[0];
+      if (!p) return;
+      var knopf = p.li.hidden ? mehrKnopf : p.li.querySelector('button');
+      umschalten(wurzel, knopf, x === wurzel ? null : x);
+      nav.scrollIntoView({ block: 'nearest' });
+    };
   }
 
   /* Seitenmenü: Seitenleiste links mit Verzeichnisgruppen; auf breiten Bildschirmen offen,
      einklappbar zu einer schmalen Leiste; Zustand wird gemerkt. */
   function seitenmenue(pfad) {
+    var LANG = 12, KURZ = 8;   // ab LANG Seiten zuerst nur KURZ zeigen (plus die aktuelle)
     var leiste = el('aside', { 'class': 'seitenmenue', id: 'seitenmenue' });
+    var zuAlle = el('button', { 'class': 'seitenmenue-werkzeug', type: 'button', title: 'Alle Verzeichnisse zuklappen', 'aria-label': 'Alle Verzeichnisse zuklappen', text: '⊟' });
     var kopf = el('div', { 'class': 'seitenmenue-kopf' }, [
       el('span', { 'class': 'seitenmenue-titel', text: daten.titel || 'Inhalt' }),
+      zuAlle,
       el('button', { 'class': 'seitenmenue-schliessen', type: 'button', title: 'Menü einklappen', 'aria-label': 'Menü einklappen', text: '‹' })
     ]);
+    var feld = el('input', { type: 'search', 'class': 'seitenmenue-feld', placeholder: 'Seite suchen …', 'aria-label': 'Seite suchen', autocomplete: 'off', spellcheck: 'false', title: 'Seite suchen (Strg/Cmd+K)' });
+    var treffer = el('div', { 'class': 'seitenmenue-treffer', hidden: '' });
+    var suche = el('div', { 'class': 'seitenmenue-suche' }, [feld]);
     var griff = el('button', { 'class': 'seitenmenue-griff', type: 'button', title: 'Menü aufklappen', 'aria-label': 'Menü aufklappen' }, [el('span', { text: '☰' }), el('span', { 'class': 'seitenmenue-griff-text', text: 'Menü' })]);
     var baumEl = el('nav', { 'class': 'seitenmenue-baum', 'aria-label': 'Verzeichnisse' });
+    var gruppeVon = {};
+    function gemerkt(v) { try { return localStorage.getItem('liloport-sm-' + v.id); } catch (e) { return null; } }
+    function merken(v, zu) { try { localStorage.setItem('liloport-sm-' + v.id, zu ? 'zu' : 'auf'); } catch (e) { /* egal */ } }
+    function setzeZu(sek, titel, zu) { sek.classList.toggle('zu', zu); titel.setAttribute('aria-expanded', zu ? 'false' : 'true'); }
     function gruppen(elternId, tiefe) {
-      var ergebnis = [];
-      kinderVon(elternId).filter(function (v) { return v.inMenue; }).forEach(function (v) {
-        var sek = el('section', { 'class': 'seitenmenue-gruppe tiefe-' + Math.min(tiefe, 3) });
-        var zu = false;
-        try { zu = localStorage.getItem('liloport-sm-' + v.id) === 'zu'; } catch (e) { /* egal */ }
-        var titel = el('button', { 'class': 'seitenmenue-gruppe-titel', type: 'button' }, [el('span', { 'class': 'pfeil', text: '▾' }), el('span', { text: v.name })]);
+      return kinderVon(elternId).map(function (v) {
+        var sek = el('section', { 'class': 'seitenmenue-gruppe tiefe-' + Math.min(tiefe, 4) });
+        var titel = el('button', { 'class': 'seitenmenue-gruppe-titel', type: 'button' }, [
+          el('span', { 'class': 'pfeil', text: '▾' }), el('span', { 'class': 'seitenmenue-gruppe-name', text: v.name }), el('span', { 'class': 'nav-zahl', text: String(anzahl(v)) })]);
         var liste = el('ul');
-        v.seiten.forEach(function (s) {
-          var a = el('a', { href: rel + s.pfad + '.html', text: s.titel });
-          if (s.pfad === pfad || s.ziel === pfad) { a.className = 'aktuell'; a.setAttribute('aria-current', 'page'); zu = false; }
-          liste.appendChild(el('li', null, [a]));
+        var hatAktuell = enthaeltAktuell(v, pfad);
+        var aktIndex = -1;
+        v.seiten.forEach(function (s, i) { if (istAktuell(s, pfad)) aktIndex = i; });
+        v.seiten.forEach(function (s, i) {
+          var li = el('li', null, [seitenLink(s, pfad)]);
+          if (v.seiten.length > LANG && i >= KURZ && i !== aktIndex) li.className = 'mehr-versteckt';
+          liste.appendChild(li);
         });
+        if (v.seiten.length > LANG) {
+          var rest = liste.querySelectorAll('.mehr-versteckt').length;
+          var mehr = el('button', { type: 'button', 'class': 'seitenmenue-mehr', text: 'Alle ' + v.seiten.length + ' Seiten zeigen' });
+          mehr.addEventListener('click', function () {
+            var auf = liste.classList.toggle('alle');
+            mehr.textContent = auf ? 'Weniger zeigen' : 'Alle ' + v.seiten.length + ' Seiten zeigen';
+          });
+          if (rest) liste.appendChild(el('li', { 'class': 'seitenmenue-mehr-zeile' }, [mehr]));
+        }
         var unter = el('div', { 'class': 'seitenmenue-unter' });
         gruppen(v.id, tiefe + 1).forEach(function (u) { unter.appendChild(u); });
-        if (unter.querySelector('.aktuell')) zu = false;
         if (!liste.children.length && !unter.children.length) liste.appendChild(el('li', { 'class': 'leer', text: 'keine Seiten' }));
-        sek.classList.toggle('zu', zu);
-        titel.setAttribute('aria-expanded', zu ? 'false' : 'true');
+        // Standard: nur der Weg zur aktuellen Seite ist offen; was man selbst auf- oder zuklappt, bleibt gemerkt
+        var g = gemerkt(v);
+        setzeZu(sek, titel, hatAktuell ? false : g ? g === 'zu' : true);
         titel.addEventListener('click', function () {
           var jetztZu = !sek.classList.contains('zu');
-          sek.classList.toggle('zu', jetztZu);
-          titel.setAttribute('aria-expanded', jetztZu ? 'false' : 'true');
-          try { localStorage.setItem('liloport-sm-' + v.id, jetztZu ? 'zu' : 'auf'); } catch (e) { /* egal */ }
+          setzeZu(sek, titel, jetztZu); merken(v, jetztZu);
         });
         sek.appendChild(titel); sek.appendChild(liste); sek.appendChild(unter);
-        ergebnis.push(sek);
+        gruppeVon[v.id] = { sek: sek, titel: titel };
+        return sek;
       });
-      return ergebnis;
     }
     gruppen(null, 0).forEach(function (g) { baumEl.appendChild(g); });
-    leiste.appendChild(kopf); leiste.appendChild(baumEl);
-    function setzen(eingeklappt, merken) {
+    leiste.appendChild(kopf); leiste.appendChild(suche); leiste.appendChild(treffer); leiste.appendChild(baumEl);
+
+    feld.addEventListener('input', function () {
+      var q = feld.value.trim();
+      baumEl.hidden = !!q; treffer.hidden = !q;
+      treffer.innerHTML = '';
+      if (q) treffer.appendChild(trefferListe(suchen(q), pfad));
+    });
+    feld.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && feld.value) { ev.preventDefault(); feld.value = ''; feld.dispatchEvent(new Event('input')); } });
+    pfeiltasten(feld, function () { return treffer.hidden ? null : treffer.querySelector('.nav-treffer'); });
+    zuAlle.addEventListener('click', function () {
+      Object.keys(gruppeVon).forEach(function (id) { var g = gruppeVon[id]; setzeZu(g.sek, g.titel, true); merken({ id: id }, true); });
+    });
+
+    function setzen(eingeklappt, merkenZustand) {
       body.classList.toggle('seitenmenue-zu', eingeklappt);
-      if (merken) { try { localStorage.setItem('liloport-seitenmenue', eingeklappt ? 'zu' : 'auf'); } catch (e) { /* egal */ } }
+      if (merkenZustand) { try { localStorage.setItem('liloport-seitenmenue', eingeklappt ? 'zu' : 'auf'); } catch (e) { /* egal */ } }
     }
-    var gemerkt = null;
-    try { gemerkt = localStorage.getItem('liloport-seitenmenue'); } catch (e) { /* egal */ }
+    var zustand = null;
+    try { zustand = localStorage.getItem('liloport-seitenmenue'); } catch (e) { /* egal */ }
     var schmal = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
-    setzen(gemerkt ? gemerkt === 'zu' : schmal, false);
+    setzen(zustand ? zustand === 'zu' : schmal, false);
     kopf.querySelector('.seitenmenue-schliessen').addEventListener('click', function () { setzen(true, true); });
     griff.addEventListener('click', function () { setzen(false, true); });
     var rumpf = document.querySelector('.rumpf');
     rumpf.insertBefore(leiste, rumpf.firstChild);
     rumpf.insertBefore(griff, leiste);
+    // Aktuelle Seite in der Leiste sichtbar machen
+    var akt = baumEl.querySelector('a.aktuell');
+    if (akt && leiste.scrollHeight > leiste.clientHeight) leiste.scrollTop = Math.max(0, akt.offsetTop - leiste.clientHeight / 3);
+
+    // Brotkrumen und Strg/Cmd+K
+    return function (x) {
+      setzen(false, false);
+      if (!x) { feld.focus(); feld.select(); return; }
+      vorfahren(x).forEach(function (y) { var g = gruppeVon[y.id]; if (g) setzeZu(g.sek, g.titel, false); });
+      var g = gruppeVon[x.id];
+      if (g) {
+        if (schmal) leiste.scrollIntoView({ block: 'start' });
+        g.sek.scrollIntoView({ block: 'nearest' });
+        g.titel.focus({ preventScroll: true });
+        g.sek.classList.add('aufgeleuchtet');
+        setTimeout(function () { g.sek.classList.remove('aufgeleuchtet'); }, 1200);
+      }
+    };
   }
 
   /* ---------- Seiten-Werkzeugleiste ---------- */
@@ -427,28 +743,66 @@
     var w = document.getElementById('seiten-werkzeuge');
     if (!w || istDashboard || !istLokalerServer || body.dataset.vorschau) return;
     var pfad = body.dataset.pfad, titel = (document.getElementById('seitentitel') || {}).textContent || pfad;
+    var drucker = el('button', { type: 'button', 'class': 'druck-knopf', title: 'Seite drucken (A4)', 'aria-label': 'Seite drucken', onclick: drucken });
+    drucker.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+      + '<path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="8" rx="2"/><path d="M7 14.5h10V20.5H7z"/><path d="M17.5 12h.01"/></svg>';
+    w.appendChild(drucker);
     w.appendChild(el('button', { type: 'button', text: 'Exportieren', title: 'Diese Seite als ZIP weitergeben oder auf einen Webserver stellen', onclick: function () { dialogExport({ pfad: pfad, titel: titel }); } }));
     w.appendChild(el('button', { type: 'button', 'class': 'primaer', text: 'Bearbeiten', id: 'bearbeiten-knopf', onclick: editorLaden }));
   }
 
-  /* ---------- Nach-oben-Knopf ---------- */
+  /* ---------- Drucken ---------- */
+  /* Vor dem Druck: Eingeklapptes öffnen und alle Bilder laden (lazy); danach wieder zuklappen.
+     Gilt auch für Strg/Cmd+P. Das Layout für A4 steht in style.css (@media print). */
+  var druckGeoeffnet = [];
+  function druckAufbereiten() {
+    [].slice.call(document.querySelectorAll('details:not([open])')).forEach(function (d) { d.open = true; druckGeoeffnet.push(d); });
+    [].slice.call(document.querySelectorAll('img[loading="lazy"]')).forEach(function (i) { i.loading = 'eager'; });
+  }
+  window.addEventListener('beforeprint', druckAufbereiten);
+  window.addEventListener('afterprint', function () { druckGeoeffnet.forEach(function (d) { d.open = false; }); druckGeoeffnet = []; });
+  function drucken() {
+    druckAufbereiten();
+    var bilder = [].slice.call(document.images).filter(function (i) { return !i.complete; });
+    var los = function () { los = function () {}; window.print(); };
+    if (!bilder.length) return los();
+    var offen = bilder.length;
+    bilder.forEach(function (i) { var fertig = function () { if (--offen <= 0) los(); }; i.addEventListener('load', fertig, { once: true }); i.addEventListener('error', fertig, { once: true }); });
+    setTimeout(function () { los(); }, 4000);   // nicht ewig auf langsame Bilder warten
+  }
+
+  /* ---------- Nach-oben- und Nach-unten-Knopf ---------- */
 
   function nachObenKnopf() {
-    /* Erscheint beim Scrollen unten rechts und bringt einen schnell wieder nach ganz oben –
-       praktisch auf langen Seiten, wo «Bearbeiten» und «Exportieren» oben stehen. */
-    var knopf = el('button', { 'class': 'nach-oben', type: 'button', title: 'Nach oben', 'aria-label': 'Nach oben scrollen', hidden: '' });
-    knopf.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">'
-      + '<path d="M5 14.5 12 7.5l7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    knopf.addEventListener('click', function () {
-      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, 0); }
-    });
-    document.body.appendChild(knopf);
-    var sichtbar = false;
+    /* Zwei runde Knöpfe unten rechts: «Nach oben» erscheint, sobald man gescrollt hat, und bringt einen
+       zurück zu «Bearbeiten» und «Exportieren»; «Nach unten» erscheint, solange die Seite noch weiter
+       nach unten reicht, und springt ans Ende (z. B. zu Fussnoten, «Verlinkt von», Kommentaren). */
+    var pfeil = function (d) {
+      return '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">'
+        + '<path d="' + d + '" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    };
+    var oben = el('button', { 'class': 'nach-oben', type: 'button', title: 'Nach oben', 'aria-label': 'Nach oben scrollen', hidden: '' });
+    var unten = el('button', { 'class': 'nach-unten', type: 'button', title: 'Nach unten', 'aria-label': 'Nach unten scrollen', hidden: '' });
+    oben.innerHTML = pfeil('M5 14.5 12 7.5l7 7');
+    unten.innerHTML = pfeil('M5 9.5 12 16.5l7-7');
+    function scrollen(y) { try { window.scrollTo({ top: y, behavior: 'smooth' }); } catch (e) { window.scrollTo(0, y); } }
+    function ende() { return Math.max(document.documentElement.scrollHeight, document.body.scrollHeight); }
+    oben.addEventListener('click', function () { scrollen(0); });
+    unten.addEventListener('click', function () { scrollen(ende()); });
+    document.body.appendChild(el('div', { 'class': 'scroll-knoepfe' }, [oben, unten]));
+    var zustand = '';
     function pruefen() {
-      var zeigen = (window.scrollY || document.documentElement.scrollTop || 0) > 400;
-      if (zeigen !== sichtbar) { sichtbar = zeigen; knopf.hidden = !zeigen; }
+      var y = window.scrollY || document.documentElement.scrollTop || 0;
+      var rest = ende() - y - window.innerHeight;
+      var zeigeOben = y > 400, zeigeUnten = rest > 400;
+      var neu = (zeigeOben ? 'o' : '') + (zeigeUnten ? 'u' : '');
+      if (neu !== zustand) { zustand = neu; oben.hidden = !zeigeOben; unten.hidden = !zeigeUnten; }
     }
     window.addEventListener('scroll', pruefen, { passive: true });
+    window.addEventListener('resize', pruefen);
+    // Die Seitenlänge ändert sich auch ohne Scrollen (Bilder laden, Editor, Ein-/Ausklappen)
+    if (window.ResizeObserver) { try { new ResizeObserver(pruefen).observe(document.body); } catch (e) { /* egal */ } }
+    window.addEventListener('load', pruefen);
     pruefen();
   }
 
@@ -575,7 +929,7 @@
 
   window.Liloport = {
     daten: daten, rel: rel, el: el, api: api, dialog: dialog, feld: feld, kreuz: kreuz, dialogExport: dialogExport,
-    istEditiermodus: istLokalerServer, kinderVon: kinderVon, editorLaden: editorLaden
+    istEditiermodus: istLokalerServer, kinderVon: alleKinderVon, editorLaden: editorLaden
   };
 
   leiste();
