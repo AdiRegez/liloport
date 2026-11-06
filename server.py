@@ -750,7 +750,8 @@ class Handler(BaseHTTPRequestHandler):
             seite = self.store.seite_aktualisieren(pfad, daten.get("titel"), daten.get("menue"), bloecke, css,
                                                    bool(daten["kommentare"]) if "kommentare" in daten else None,
                                                    daten.get("datum"), daten.get("tags"),
-                                                   bool(daten["verweise"]) if "verweise" in daten else None)
+                                                   bool(daten["verweise"]) if "verweise" in daten else None,
+                                                   str(daten["gliederung"] or "") if "gliederung" in daten else None)
             if editor:
                 self.letzte_speicherung[pfad] = (editor, seite.get("geaendert"))
             self.assets.referenzen_setzen(pfad, seite)

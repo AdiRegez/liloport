@@ -36,7 +36,11 @@ Liloport-Leiste lässt sich mit ▲ nach oben einklappen; ein kleiner Griff in d
 Der Schalter Amateur/Profi sitzt in der Leiste der Seiten (nur dort ändert er etwas: welche Werkzeuge der
 Editor anbietet); im Dashboard, bei Kompetenzrahmen und Abbildung erscheint er nicht. Seiten mit der Menü-Option
 «Seitenmenü» bekommen eine Seitenleiste links mit auf- und zuklappbaren Verzeichnisgruppen und
-markierter aktueller Seite; sie lässt sich mit ‹ einklappen und über «Menü» wieder öffnen.
+markierter aktueller Seite; sie lässt sich mit ‹ einklappen und über «Menü» wieder öffnen. Auch grosse Portfolios
+bleiben übersichtlich: Die Leiste oben zeigt die Hauptverzeichnisse in einer Zeile (der Rest unter «Mehr») und
+öffnet per Klick ein Panel mit den Seiten in Spalten und aufklappbaren Unterverzeichnissen; das Seitenmenü öffnet
+nur den Weg zur aktuellen Seite und kürzt lange Listen. Brotkrumen über dem Titel zeigen den Ort der Seite, und
+**Strg/Cmd+K** sucht jede Seite nach Titel, Verzeichnis oder Tag.
 
 ## Installieren und starten
 
@@ -136,15 +140,23 @@ Fett/Kursiv/Unterstrichen, Listen, Zitat, Ausrichtung, Link), Bild (mit Breite u
 Audio (MP3, WAV, OGG, M4A, FLAC – wie Videos ohne Grössenlimit), PDF, ZIP-Datei, Button mit Link,
 Trenner und Spalten (2 bis 4); Blöcke lassen sich per Drag und Drop verschieben, auch in Spalten hinein,
 sowie einklappen und duplizieren. Trenner sind gestaltbar: Farbe, Dicke, Linienart (durchgezogen,
-gestrichelt, gepunktet, doppelt) und Abstand zum Block davor und danach. Profi schaltet rohe HTML-Blöcke,
-Seiten-CSS (automatisch auf die Seite eingegrenzt), H4, Code, Farbe, Tabellen, freie Bildbreiten und die
+gestrichelt, gepunktet, doppelt) und Abstand zum Block davor und danach; drei Vorlagen («Grosse Punkte»,
+«Akzentlinie», «Dezent gestrichelt») setzen alles auf einmal. Profi schaltet rohe HTML-Blöcke,
+Seiten-CSS (automatisch auf die Seite eingegrenzt), H4, Code, **Schriftfarbe** (Palette, HEX-Code oder
+RGB-Farbwähler), **Textmarker** (feste Palette; auf dunklen Tönen wird die Schrift automatisch weiss),
+**Tabellen** (Tabellen-Leiste: Zeilen/Spalten, Zellfarben, Ausrichtung, Kopfzeile, Summenzeile, Beschriftung,
+sieben Designs), freie Bildbreiten, die **Gliederung** (macht sichtbar, welcher Inhalt zu welcher Überschrift H1–H4
+gehört; neben dem Standard – Kapitel links bündig, Überschriften in der Farbe ihrer Ebene, gilt für alle
+Seiten – drei Designs: Leitlinien, Flächen, Nummeriert) und die
 **Galerie** frei: mehrere Bilder im Masonry-Layout (2 bis 4 Spalten, Bilder in Originalproportion, je mit
 Bildtext), das auch im Export und im Lesemodus ohne JavaScript funktioniert. Ein Klick auf ein Bild
 (Galerie oder Bild-Block) öffnet es im **Vollbild**; in Galerien lässt sich mit ‹ › und den Pfeiltasten
 blättern – auch auf exportierten Seiten. Ein Wechsel verliert keine
 Daten: HTML- und Galerie-Blöcke bleiben im Amateur-Niveau sichtbar, nur gesperrt. PDF- und ZIP-Blöcke
-öffnen per Klick den Ordner, in dem die Datei liegt. Auf langen Seiten erscheint beim Scrollen unten
-rechts ein Nach-oben-Knopf. Im Editor erscheint beim Überfahren eines Blocks ein «+», das direkt
+öffnen per Klick den Ordner, in dem die Datei liegt. Unter dem Titel steht neben dem Datum, wann die Seite
+zuletzt bearbeitet wurde (Datum und Uhrzeit). Auf langen Seiten erscheinen unten rechts ein Nach-oben- und
+ein Nach-unten-Knopf. Das dezente Drucker-Symbol neben «Exportieren» druckt die Seite für A4: Eingeklapptes
+ausgeklappt, und wo die digitale Version Video, Audio, PDF oder Dateien enthält, steht ein kurzer Hinweis. Im Editor erscheint beim Überfahren eines Blocks ein «+», das direkt
 danach einen neuen Block einfügt (ganz oben gibt es einen eigenen Einfügepunkt), und beim Ziehen eines
 Blocks an den Fensterrand scrollt die Seite von selbst.
 

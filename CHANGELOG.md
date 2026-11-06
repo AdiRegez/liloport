@@ -4,6 +4,74 @@ Alle wesentlichen Änderungen an Liloport. Versionen vor 1.0 sind Beta: Liloport
 noch Fehler vorkommen. Rückmeldungen bitte über [GitHub-Issues](https://github.com/AdiRegez/liloport/issues)
 oder an kontakt@liloport.ch.
 
+## 0.12.0 Beta
+
+**Fehlerbehebung**
+- **Fett, kursiv und unterstrichen gehen beim Speichern nicht mehr verloren**: Der Editor liess den Browser
+  diese Formate als `<span style="font-weight: bold">` schreiben, und der HTML-Filter entfernte sie beim
+  Speichern. Jetzt entstehen echte `<strong>`, `<em>`, `<u>`; der Filter übernimmt zudem solche
+  span-Formate (und `<font color>`) als Auszeichnung bzw. Farbe, statt sie zu verwerfen
+
+**Editor (Profi)**
+- **Schriftfarbe** mit Palette: zwölf Farben passend zum Seitendesign, dazu ein Feld für HEX-Codes
+  (`#2a7f78`, `#c25`, auch `rgb(…)`), der bisherige RGB-Farbwähler des Systems und «Standardfarbe»
+- **Textmarker**: Text farbig hinterlegen mit einer festen Palette (Gelb, Rosa, Pink, Lavendel, Eisblau,
+  Mint, Pfirsich, Teal, Violett, Pflaume). Die Schriftfarbe wird automatisch angepasst – dunkle Schrift auf
+  hellen, weisse Schrift auf dunklen Tönen –, so bleibt markierter Text auch im dunklen Modus lesbar;
+  «Markierung entfernen» nimmt sie wieder weg
+- **Tabellen ausgebaut**: «▦ Tabelle» fragt Zeilen, Spalten, Kopfzeile und Design ab. Steht der Cursor in
+  einer Tabelle, erscheint die Tabellen-Leiste: Zeilen oben/unten und Spalten links/rechts einfügen oder
+  löschen; Hintergrundfarbe (zwölf Töne, Schrift automatisch dunkel bzw. weiss) und Ausrichtung für Zelle,
+  ganze Zeile oder ganze Spalte; Schalter für Kopfzeile, erste Spalte, Summenzeile, Beschriftung, volle
+  Breite, kompakt und zentriert; sieben Designs mit Vorschau (Raster, Schlicht, Gestreift, Teal, Lavendel,
+  Pastell, Luftig); Tabelle löschen. Tab/Shift+Tab springt von Zelle zu Zelle, Tab in der letzten Zelle hängt
+  eine Zeile an. Breite Tabellen scrollen auf der Seite in ihrem Rahmen, statt über das Layout hinauszuragen
+- **Gliederung**: macht die Hierarchie der Überschriften sichtbar – welcher Inhalt zu welcher H1, H2, H3, H4
+  gehört. Wahl pro Seite in der Editor-Leiste («Gliederung: Standard / Leitlinien / Flächen / Nummeriert»):
+  *Leitlinien* zeichnet je Ebene eine zarte, gepunktete Linie am rechten Rand, eng gestaffelt; die Strichstärke
+  unterscheidet die Ebenen (H1 am kräftigsten); *Flächen* zeigt verschachtelte Karten mit Kopfstreifen in sehr
+  zurückhaltenden Tönen, damit die Farben beim Lesen nicht stören; *Nummeriert* setzt Gliederungsnummern
+  (1, 1.1, 1.1.1) vor die Überschriften. Ausser bei Flächen beginnen alle Überschriften links auf derselben
+  Höhe. Ein Abschnitt umfasst alles bis zur nächsten Überschrift gleicher oder höherer Ordnung, auch Bilder
+  und andere Blöcke dazwischen; Textblöcke mit mehreren Überschriften werden dafür aufgeteilt. Einklappbare
+  Blöcke und Spalten bleiben als Ganzes erhalten. Funktioniert auch im Export, im Lesemodus und ohne
+  JavaScript; der Import übernimmt die Wahl
+
+**Editor (Amateur und Profi)**
+- **Trenner-Vorlagen**: drei Knöpfe setzen alle Einstellungen eines Trenners auf einmal – «Grosse Punkte»
+  (Standardfarbe, gepunktet, 8 px, Abstand oben/unten je 50 px), «Akzentlinie» (Teal, durchgezogen, 3 px,
+  je 32 px) und «Dezent gestrichelt» (Standardfarbe, gestrichelt, 2 px, je 16 px); danach lässt sich alles
+  weiter anpassen
+
+**Seiten (Amateur und Profi)**
+- **Übersichtliche Menüs für grosse Portfolios** (viele Verzeichnisse, tiefe Verschachtelung, lange Seitenlisten):
+  - *Leiste oben*: die Hauptverzeichnisse in einer Zeile, was nicht passt, liegt unter «Mehr»; das aktuelle
+    Verzeichnis bleibt sichtbar und ist markiert. Ein Klick öffnet ein Panel mit den Seiten in Spalten,
+    Unterverzeichnissen zum Aufklappen (der Weg zur aktuellen Seite ist offen), Seitenzahlen und ab elf Seiten
+    einem Suchfeld. Schliessen mit Escape oder Klick daneben
+  - *Seitenmenü*: Suchfeld oben; nur der Weg zur aktuellen Seite ist aufgeklappt (selbst Auf- und Zugeklapptes
+    bleibt gemerkt); Führungslinien für tiefe Ebenen; Seitenzahl je Verzeichnis; Listen ab 13 Seiten zeigen
+    zuerst acht (plus die aktuelle) und «Alle … Seiten zeigen»; «⊟» klappt alles zu; die aktuelle Seite wird in
+    die Leiste gescrollt
+  - *Brotkrumen* über dem Titel zeigen, wo die Seite liegt; ein Klick öffnet das Menü an dieser Stelle
+  - *Seitensuche* mit Strg/Cmd+K (oder «Seite suchen»): alle Seiten nach Titel, Verzeichnis und Tags, auch ohne
+    Umlaute; ohne Eingabe die zuletzt bearbeiteten; Pfeiltasten und Enter
+- **Neues Standarddesign für Überschriften**: Kapitel links bündig, Überschriften in der Farbe ihrer Ebene
+  (H1 Teal, H2 Violett, H3 Pink, H4 Eisblau) – entspricht «Nummeriert» ohne Nummern und gilt für alle Seiten,
+  auch im Amateur-Modus (dort ohne Wahl). Die frühere Linie unter H2 entfällt
+- **Drucken**: Ein dezentes Drucker-Symbol links neben «Exportieren» bereitet die Seite für A4 auf – nur der
+  Inhalt, helle Farben, Seitenzahlen, keine Menüs. Überschriften bleiben bei ihrem Text, Bilder, Tabellenzeilen,
+  Zitate und Kästen werden nicht zerschnitten, die Kopfzeile von Tabellen wiederholt sich auf jeder Seite.
+  Eingeklappte Bereiche werden ausgeklappt gedruckt. Für Video, Audio, PDF, ZIP-Dateien und eingebettete
+  Inhalte steht ein kurzer Hinweis mit Dateinamen, dass die digitale Version hier mehr bereithält;
+  Schaltflächen bleiben sichtbar, darunter steht klein, wohin sie führen. Gilt auch für Strg/Cmd+P und
+  exportierte Seiten
+- **Nach-unten-Knopf** neben dem Nach-oben-Knopf: erscheint, solange die Seite weiter nach unten reicht,
+  und springt ans Ende (Fussnoten, «Verlinkt von», Kommentare)
+- Unter dem Titel steht neben dem Datum neu **«zuletzt bearbeitet»** mit Datum und Uhrzeit der letzten
+  Speicherung (im Export nur, wenn das Datum angezeigt wird)
+- **Lange Links** (z. B. 400 Zeichen) brechen um, statt über das Layout hinauszuragen
+
 ## 0.11.0 Beta
 
 **Seiten**
